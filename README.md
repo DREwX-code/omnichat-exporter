@@ -13,10 +13,6 @@
 
 **Fast. Clean. Reliable.**
 
-No external servers.  
-No account required.  
-No unnecessary complexity.
-
 ---
 
 ## What OmniChat Exporter does
@@ -104,7 +100,7 @@ Feedback and improvement suggestions are welcome via:
 
 ## Author
 
-Developed and maintained by **Dℝ∃wX** (GitHub: [DREwX-code](https://github.com/DREwX-code)).
+Developed and maintained by **Dℝ∃wX** (GitHub: [DREwX-code](https://github.com/DREwX-code)).  
 Engineered for performance, precision, and long-term evolution.
 
 ---
