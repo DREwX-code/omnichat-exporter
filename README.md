@@ -2,7 +2,7 @@
 
 ## Universal AI conversation export tool.
 
-[OmniChat Exporter](https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly) allows you to export and download conversations from **ChatGPT**, **Gemini**, **Claude**, **Grok**, and **DeepSeek** in **TXT, PDF, JSON, or Markdown format** — per message or full thread.
+[OmniChat Exporter](https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly) allows you to export and download conversations from **ChatGPT**, **Gemini**, **Claude**, **Grok**, and **DeepSeek** in **TXT, PDF, JSON, or Markdown format** per message or full thread.
 
 **Fast. Clean. Reliable.**
 
@@ -91,7 +91,7 @@ No chat content is transmitted to any external PDF service.
 Feedback and improvement suggestions are welcome via:
 
 - [GreasyFork feedback](https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly/feedback)  
-- GitHub Issues  
+- [GitHub Issues](https://github.com/DREwX-code/omnichat-exporter/issues) 
 
 ---
 
