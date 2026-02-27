@@ -104,7 +104,7 @@ Feedback and improvement suggestions are welcome via:
 
 ## Author
 
-Developed and maintained by **Dℝ∃wX**  
+Developed and maintained by **Dℝ∃wX** (GitHub: [DREwX-code](https://github.com/DREwX-code)).
 Engineered for performance, precision, and long-term evolution.
 
 ---
