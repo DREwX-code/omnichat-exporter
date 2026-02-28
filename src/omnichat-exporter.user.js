@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.0.0
+// @version      1.0.1
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -198,6 +198,10 @@ License: MIT
   const STATUS_DURATION_MS = 1400;
   const PDF_EMOJI_FONT_FAMILY = 'NotoEmoji';
   const PDF_EMOJI_FONT_FILE = 'NotoEmoji-Regular.ttf';
+  const PDF_CODE_DEFAULT_TEXT_COLOR = '#f8fafc';
+  const NON_EXPORTABLE_NODE_SELECTOR =
+    'button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"], ' +
+    '.cdk-visually-hidden, .visually-hidden, .sr-only, [aria-hidden="true"], [hidden]';
   const PDF_EMOJI_FONT_URLS = [
     'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoEmoji-Regular.ttf'
   ];
@@ -1494,7 +1498,7 @@ License: MIT
                 (node.matches && node.matches('.font-claude-response') ? 'assistant' : 'message'));
           const content = extractMessageContent(node);
           if (content && content.text) {
-            messages.push({ role, text: content.text, html: content.html, pdf: content.pdf });
+            messages.push({ role, text: content.text, html: content.html });
           }
         });
         return;
@@ -1502,7 +1506,7 @@ License: MIT
       const role = inferRoleFromRoot(turn) || 'message';
       const content = extractMessageContentFromRoot(turn);
       if (content && content.text) {
-        messages.push({ role, text: content.text, html: content.html, pdf: content.pdf });
+        messages.push({ role, text: content.text, html: content.html });
       }
     });
     return messages;
@@ -1524,7 +1528,7 @@ License: MIT
             inferRoleFromRoot(node) || 'message';
           const content = extractMessageContent(node);
           if (content && content.text) {
-            messages.push({ role, text: content.text, html: content.html, pdf: content.pdf });
+            messages.push({ role, text: content.text, html: content.html });
           }
         });
         return;
@@ -1540,7 +1544,7 @@ License: MIT
 
         const content = extractMessageContent(node);
         if (content && content.text) {
-          messages.push({ role, text: content.text, html: content.html, pdf: content.pdf });
+          messages.push({ role, text: content.text, html: content.html });
         }
       });
     };
@@ -1674,7 +1678,7 @@ License: MIT
         inferRoleFromRoot(node) || 'message';
       const content = extractMessageContent(node);
       if (content && content.text) {
-        messages.push({ role, text: content.text, html: content.html, pdf: content.pdf });
+        messages.push({ role, text: content.text, html: content.html });
       }
     });
     return messages;
@@ -2087,8 +2091,7 @@ License: MIT
   function cleanHtml(node) {
     if (!node) return '';
     const clone = node.cloneNode(true);
-    const unwanted = clone.querySelectorAll('button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"]');
-    unwanted.forEach(el => el.remove());
+    stripNonExportableNodes(clone);
     return clone.innerHTML;
   }
 
@@ -2097,10 +2100,19 @@ License: MIT
       return node;
     }
     const clone = node.cloneNode(true);
+    stripNonExportableNodes(clone);
     if (platform === 'grok') {
       normalizeGrokStrokeWidthInlineSpan(clone);
     }
     return clone;
+  }
+
+  function stripNonExportableNodes(root) {
+    if (!root || !root.querySelectorAll) {
+      return;
+    }
+    const unwanted = root.querySelectorAll(NON_EXPORTABLE_NODE_SELECTOR);
+    unwanted.forEach((el) => el.remove());
   }
 
   function normalizeGrokStrokeWidthInlineSpan(root) {
@@ -2239,8 +2251,7 @@ License: MIT
         if (text) {
           return {
             text,
-            html: cleanHtml(exportNode),
-            pdf: parseNodeToPdfMake(exportNode)
+            html: cleanHtml(exportNode)
           };
         }
       }
@@ -2261,8 +2272,7 @@ License: MIT
         const exportContent = prepareNodeForExport(content);
         return {
           text: normalizeText(exportContent.innerText || ''),
-          html: cleanHtml(exportContent),
-          pdf: parseNodeToPdfMake(exportContent)
+          html: cleanHtml(exportContent)
         };
       }
       selectors = [
@@ -2292,7 +2302,6 @@ License: MIT
 
     const parts = [];
     const htmlParts = [];
-    const pdfParts = [];
 
     nodes.forEach((node) => {
       if (node.closest('button, nav, header, footer, svg')) {
@@ -2301,30 +2310,25 @@ License: MIT
       const exportNode = prepareNodeForExport(node);
       const text = normalizeText(exportNode.innerText || '');
       const html = cleanHtml(exportNode);
-      const pdf = parseNodeToPdfMake(exportNode);
       if (text) {
         parts.push(text);
         htmlParts.push(html);
-        pdfParts.push(pdf);
       }
     });
 
     if (parts.length) {
       return {
         text: parts.join('\n\n').trim(),
-        html: htmlParts.join('<br><br>').trim(),
-        pdf: pdfParts.length === 1 ? pdfParts[0] : { stack: pdfParts.flat().filter(Boolean) }
+        html: htmlParts.join('<br><br>').trim()
       };
     }
 
     const fallbackNode = prepareNodeForExport(root);
     const fallbackText = normalizeText(fallbackNode.innerText || '');
     const fallbackHtml = cleanHtml(fallbackNode);
-    const fallbackPdf = parseNodeToPdfMake(fallbackNode);
     return {
       text: stripActionLines(fallbackText, root),
-      html: fallbackHtml,
-      pdf: fallbackPdf
+      html: fallbackHtml
     };
   }
 
@@ -2385,13 +2389,12 @@ License: MIT
     if (!contentRoot) {
       return { text: '', html: '' };
     }
-    const rawText = contentRoot.innerText || '';
-    const html = cleanHtml(contentRoot);
-    const pdf = parseNodeToPdfMake(contentRoot);
+    const exportNode = prepareNodeForExport(contentRoot);
+    const rawText = exportNode.innerText || '';
+    const html = cleanHtml(exportNode);
     return {
       text: normalizeText(rawText),
-      html: html,
-      pdf: pdf
+      html: html
     };
   }
 
@@ -2480,7 +2483,11 @@ License: MIT
     const payload = {
       url: location.href,
       exportedAt: new Date().toISOString(),
-      messages: messages
+      messages: messages.map((message) => ({
+        role: ensureString(message.role),
+        text: ensureString(message.text),
+        html: ensureString(message.html)
+      }))
     };
     if (conversationTitle) {
       payload.conversationTitle = conversationTitle;
@@ -2533,6 +2540,34 @@ License: MIT
       return { text: formatPdfTextWithEmoji(htmlOrText), preserveLeadingSpaces: true };
     }
 
+    if (document && document.body) {
+      const mount = document.createElement('div');
+      mount.setAttribute('data-omni-pdf-parse', 'true');
+      mount.style.position = 'fixed';
+      mount.style.left = '-100000px';
+      mount.style.top = '-100000px';
+      mount.style.width = '1px';
+      mount.style.height = '1px';
+      mount.style.opacity = '0';
+      mount.style.pointerEvents = 'none';
+      mount.style.overflow = 'hidden';
+      try {
+        mount.innerHTML = htmlOrText;
+        stripNonExportableNodes(mount);
+        document.body.appendChild(mount);
+        const liveResult = parseNodeToPdfMake(mount);
+        if (Array.isArray(liveResult) && liveResult.length === 1) {
+          return liveResult[0];
+        }
+        return liveResult;
+      } catch (err) {
+      } finally {
+        if (mount.parentNode) {
+          mount.parentNode.removeChild(mount);
+        }
+      }
+    }
+
     const temp = parseHtmlContainer(htmlOrText);
     if (!temp) {
       return {
@@ -2579,7 +2614,7 @@ License: MIT
       return '';
     }
     const withLineBreaks = String(html)
-      .replace(/<\s*br\s*\/?>/gi, '\n')
+      .replace(/<\s*br\b[^>]*>/gi, '\n')
       .replace(/<\/(p|div|h1|h2|h3|h4|h5|h6|li|blockquote|pre|tr)>/gi, '\n')
       .replace(/<li[^>]*>/gi, '- ');
     const withoutTags = withLineBreaks.replace(/<[^>]+>/g, '');
@@ -2639,7 +2674,7 @@ License: MIT
     }
 
     if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.matches && node.matches('button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"]')) {
+      if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
         return null;
       }
 
@@ -2729,29 +2764,63 @@ License: MIT
         }
 
         case 'ul': {
-          const items = Array.from(node.querySelectorAll('li')).map(li => {
-            const content = parseNodeToPdfMake(li);
-            return Array.isArray(content) ? { text: content } : (content || { text: '' });
-          });
-          return { ul: items, margin: [0, 4, 0, 4] };
+          return buildStructuredPdfList(node, false);
         }
 
         case 'ol': {
-          const items = Array.from(node.querySelectorAll('li')).map(li => {
-            const content = parseNodeToPdfMake(li);
-            return Array.isArray(content) ? { text: content } : (content || { text: '' });
-          });
-          return { ol: items, margin: [0, 4, 0, 4] };
+          return buildStructuredPdfList(node, true);
         }
 
         case 'li':
-          return forceInlinePdfText(childContent, node.textContent || '');
+          return buildListItemPdfContent(childContent, node.textContent || '');
 
         case 'p':
           return withParagraphBreak(childContent, node.textContent || '');
 
+        case 'blockquote': {
+
+          const unwrappedForQuote = childContent.flatMap((part) => {
+            if (
+              part &&
+              typeof part === 'object' &&
+              Array.isArray(part.stack) &&
+              !Object.prototype.hasOwnProperty.call(part, 'ul') &&
+              !Object.prototype.hasOwnProperty.call(part, 'ol') &&
+              !Object.prototype.hasOwnProperty.call(part, 'image') &&
+              !Object.prototype.hasOwnProperty.call(part, 'table')
+            ) {
+              return part.stack;
+            }
+            return [part];
+          });
+          const quoteContent = composeMixedPdfStack(unwrappedForQuote, node.textContent || '');
+          return {
+            table: {
+              widths: [0.01, '*'],
+              body: [[
+                { text: '', fillColor: '#e5e7eb', border: [false, false, false, false] },
+                {
+                  stack: quoteContent,
+                  fillColor: '#f9fafb',
+                  color: '#475569',
+                  border: [false, false, false, false]
+                }
+              ]]
+            },
+            layout: {
+              hLineWidth: () => 0,
+              vLineWidth: () => 0,
+              paddingLeft: (i) => (i === 0 ? 0 : 8),
+              paddingRight: () => 8,
+              paddingTop: () => 4,
+              paddingBottom: () => 4
+            },
+            margin: [6, 2, 0, 6]
+          };
+        }
+
         case 'br':
-          return { text: '\n' };
+          return { text: '\n', preserveLeadingSpaces: true };
 
         case 'div':
         case 'span':
@@ -2805,6 +2874,133 @@ License: MIT
     };
   }
 
+  function getDirectListItems(listNode) {
+    if (!listNode) {
+      return [];
+    }
+    return Array.from(listNode.children || []).filter((child) => {
+      return child && child.tagName && child.tagName.toLowerCase() === 'li';
+    });
+  }
+
+  function buildStructuredPdfList(listNode, isOrdered) {
+    const items = getDirectListItems(listNode);
+    if (!items.length) {
+      return null;
+    }
+
+    const start = getOrderedListStart(listNode);
+    const body = items.map((li, index) => {
+      const marker = isOrdered ? `${start + index}.` : '•';
+      const stack = buildListItemStackFromNode(li);
+      return [
+        {
+          text: marker,
+          bold: isOrdered,
+          noWrap: true,
+          color: '#334155',
+          alignment: 'right',
+          margin: [0, 0, 3, 0],
+          border: [false, false, false, false]
+        },
+        {
+          stack: stack.length ? stack : [{ text: '' }],
+          border: [false, false, false, false]
+        }
+      ];
+    });
+
+    return {
+      table: {
+        widths: [14, '*'],
+        body: body
+      },
+      layout: {
+        hLineWidth: () => 0,
+        vLineWidth: () => 0,
+        paddingLeft: () => 0,
+        paddingRight: (i) => (i === 0 ? 2 : 0),
+        paddingTop: () => 0,
+        paddingBottom: () => 0
+      },
+      margin: [0, 2, 0, 2]
+    };
+  }
+
+  function getOrderedListStart(listNode) {
+    if (!listNode || !listNode.getAttribute) {
+      return 1;
+    }
+    const raw = listNode.getAttribute('start');
+    if (!raw) {
+      return 1;
+    }
+    const value = Number.parseInt(raw, 10);
+    return Number.isFinite(value) ? value : 1;
+  }
+
+  function buildListItemStackFromNode(liNode) {
+    const parts = [];
+    Array.from(liNode.childNodes || []).forEach((child) => {
+      const isParagraphNode =
+        child &&
+        child.nodeType === Node.ELEMENT_NODE &&
+        child.tagName &&
+        child.tagName.toLowerCase() === 'p';
+
+      if (isParagraphNode) {
+        Array.from(child.childNodes || []).forEach((paragraphChild) => {
+          const parsed = parseNodeRecursive(paragraphChild);
+          if (!parsed) {
+            return;
+          }
+          if (Array.isArray(parsed)) {
+            parts.push(...parsed);
+          } else {
+            parts.push(parsed);
+          }
+        });
+        return;
+      }
+
+      const parsed = parseNodeRecursive(child);
+      if (!parsed) {
+        return;
+      }
+      if (Array.isArray(parsed)) {
+        parts.push(...parsed);
+      } else {
+        parts.push(parsed);
+      }
+    });
+
+    const mixed = composeMixedPdfStack(parts, liNode.textContent || '');
+    return normalizeListItemStack(mixed);
+  }
+
+  function normalizeListItemStack(stack) {
+    const items = Array.isArray(stack) ? stack : [];
+    return items.map((item) => {
+      if (!isParagraphStyleStack(item)) {
+        return item;
+      }
+      if (item.stack.length === 1) {
+        return item.stack[0];
+      }
+      return { stack: item.stack };
+    }).filter(Boolean);
+  }
+
+  function isParagraphStyleStack(item) {
+    if (!item || typeof item !== 'object' || !Array.isArray(item.stack)) {
+      return false;
+    }
+    if (!Array.isArray(item.margin) || item.margin.length !== 4) {
+      return false;
+    }
+    return item.margin[0] === 0 && item.margin[1] === 0 && item.margin[2] === 0 && item.margin[3] === 6;
+  }
+
   function buildSpecialPdfCodeBlock(node) {
     if (!isSpecialCodeBlockElement(node)) {
       return null;
@@ -2813,7 +3009,14 @@ License: MIT
     if (!codeText) {
       return null;
     }
+    const richCodeText =
+      extractChatGptCodeRichInlines(node) ||
+      extractGeminiCodeRichInlines(node) ||
+      extractClaudeCodeRichInlines(node) ||
+      extractGrokCodeRichInlines(node) ||
+      extractDeepSeekCodeRichInlines(node);
     const language = extractCodeBlockLanguage(node) || 'Code';
+    const headerLabel = language;
     return {
       table: {
         widths: [5, '*'],
@@ -2821,7 +3024,7 @@ License: MIT
           [
             { text: '', fillColor: '#0ea5e9', border: [false, false, false, false] },
             {
-              text: `Code : ${language}`,
+              text: headerLabel,
               style: 'codeBlockHeader',
               fillColor: '#0f172a',
               border: [false, false, false, false]
@@ -2830,7 +3033,7 @@ License: MIT
           [
             { text: '', fillColor: '#334155', border: [false, false, false, false] },
             {
-              text: formatPdfTextWithEmoji(codeText),
+              text: richCodeText || formatPdfTextWithEmoji(codeText),
               style: 'codeBlockBody',
               preserveLeadingSpaces: true,
               fillColor: '#1f2937',
@@ -2851,6 +3054,466 @@ License: MIT
     };
   }
 
+  function extractChatGptCodeRichInlines(node) {
+    if (platform !== 'chatgpt' || !node || !node.querySelector) {
+      return null;
+    }
+    const cmContent = node.querySelector('.cm-content');
+    if (!cmContent) {
+      return null;
+    }
+    const defaultColor = normalizePdfColorValue(
+      ensureString(window.getComputedStyle(cmContent).color)
+    ) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const parts = [];
+    appendChatGptCodeInlinesFromNode(cmContent, defaultColor, parts);
+    const merged = mergeCodeRichInlines(parts);
+    return merged.length ? merged : null;
+  }
+
+  function appendChatGptCodeInlinesFromNode(node, inheritedColor, out) {
+    if (!node) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (!text) {
+        return;
+      }
+      out.push({
+        text: text,
+        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const tagName = (node.tagName || '').toLowerCase();
+    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    if (tagName === 'span') {
+      const computedColor = normalizePdfColorValue(
+        ensureString(window.getComputedStyle(node).color)
+      );
+      if (computedColor) {
+        nextColor = computedColor;
+      }
+    }
+
+    if (tagName === 'br') {
+      out.push({
+        text: '\n',
+        color: nextColor
+      });
+      return;
+    }
+
+    if (tagName === 'div' && node.classList && node.classList.contains('cm-content')) {
+      const cmLines = Array.from(node.children || []).filter((child) => {
+        return child && child.classList && child.classList.contains('cm-line');
+      });
+      if (cmLines.length) {
+        cmLines.forEach((lineNode, index) => {
+          appendChatGptCodeInlinesFromNode(lineNode, nextColor, out);
+          if (index < cmLines.length - 1) {
+            out.push({ text: '\n', color: nextColor });
+          }
+        });
+        return;
+      }
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => {
+      appendChatGptCodeInlinesFromNode(child, nextColor, out);
+    });
+  }
+
+  function extractClaudeCodeRichInlines(node) {
+    if (platform !== 'claude' || !node || !node.querySelector) {
+      return null;
+    }
+    const codeRoot =
+      querySelectorScoped(node, ':scope > .overflow-x-auto > pre > code') ||
+      querySelectorScoped(node, ':scope > pre > code') ||
+      node.querySelector('pre.code-block__code > code') ||
+      node.querySelector('pre code');
+    if (!codeRoot) {
+      return null;
+    }
+
+    const defaultColor = resolveInlineColorFromStyleAttr(codeRoot) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const parts = [];
+    appendClaudeCodeInlinesFromNode(codeRoot, defaultColor, parts);
+    const merged = mergeCodeRichInlines(parts);
+    return merged.length ? merged : null;
+  }
+
+  function extractGeminiCodeRichInlines(node) {
+    if (platform !== 'gemini' || !node || !node.querySelector) {
+      return null;
+    }
+    const codeRoot =
+      querySelectorScoped(node, ':scope > .code-block > .formatted-code-block-internal-container > pre > code[data-test-id="code-content"]') ||
+      querySelectorScoped(node, ':scope > .formatted-code-block-internal-container > pre > code[data-test-id="code-content"]') ||
+      querySelectorScoped(node, ':scope > pre > code[data-test-id="code-content"]') ||
+      node.querySelector('code[data-test-id="code-content"]') ||
+      querySelectorScoped(node, ':scope > pre > code') ||
+      node.querySelector('pre code');
+    if (!codeRoot) {
+      return null;
+    }
+
+    const defaultColor = normalizePdfColorValue(
+      ensureString(window.getComputedStyle(codeRoot).color)
+    ) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const parts = [];
+    appendGeminiCodeInlinesFromNode(codeRoot, defaultColor, parts);
+    const merged = mergeCodeRichInlines(parts);
+    return merged.length ? merged : null;
+  }
+
+  function extractGrokCodeRichInlines(node) {
+    if (platform !== 'grok' || !node || !node.querySelector) {
+      return null;
+    }
+    const codeRoot =
+      querySelectorScoped(node, ':scope > .overflow-x-auto > pre > code') ||
+      querySelectorScoped(node, ':scope > pre > code') ||
+      node.querySelector('pre code');
+    if (!codeRoot) {
+      return null;
+    }
+
+    const defaultColor = resolveInlineColorFromStyleAttr(codeRoot) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const parts = [];
+    const lines = Array.from(codeRoot.querySelectorAll(':scope > span.line'));
+    if (lines.length) {
+      lines.forEach((lineNode, index) => {
+        appendGrokCodeInlinesFromNode(lineNode, defaultColor, parts);
+        if (index < lines.length - 1) {
+          parts.push({ text: '\n', color: defaultColor });
+        }
+      });
+    } else {
+      appendGrokCodeInlinesFromNode(codeRoot, defaultColor, parts);
+    }
+
+    const merged = mergeCodeRichInlines(parts);
+    return merged.length ? merged : null;
+  }
+
+  function extractDeepSeekCodeRichInlines(node) {
+    if (platform !== 'deepseek' || !node || !node.querySelector) {
+      return null;
+    }
+    const tagName = ensureString(node.tagName).toLowerCase();
+    const codeRoot =
+      (tagName === 'code' || tagName === 'pre' ? node : null) ||
+      querySelectorScoped(node, ':scope > pre > code') ||
+      querySelectorScoped(node, ':scope > pre') ||
+      node.querySelector('pre code') ||
+      node.querySelector('pre') ||
+      node.querySelector('code');
+    if (!codeRoot) {
+      return null;
+    }
+
+    const defaultColor = normalizePdfColorValue(
+      ensureString(window.getComputedStyle(codeRoot).color)
+    ) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const parts = [];
+    const directSpanChildren = Array.from(codeRoot.childNodes || []).filter((child) => {
+      return child && child.nodeType === Node.ELEMENT_NODE && ensureString(child.tagName).toLowerCase() === 'span';
+    });
+    const allChildrenAreSpans =
+      directSpanChildren.length > 0 &&
+      directSpanChildren.length === (codeRoot.childNodes || []).length;
+    if (allChildrenAreSpans) {
+      directSpanChildren.forEach((lineNode, index) => {
+        appendDeepSeekCodeInlinesFromNode(lineNode, defaultColor, parts);
+        if (index < directSpanChildren.length - 1) {
+          parts.push({ text: '\n', color: defaultColor });
+        }
+      });
+    } else {
+      appendDeepSeekCodeInlinesFromNode(codeRoot, defaultColor, parts);
+    }
+    const merged = mergeCodeRichInlines(parts);
+    return merged.length ? merged : null;
+  }
+
+  function appendClaudeCodeInlinesFromNode(node, inheritedColor, out) {
+    if (!node) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (!text) {
+        return;
+      }
+      out.push({
+        text: text,
+        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const tagName = (node.tagName || '').toLowerCase();
+    const inlineColor = resolveInlineColorFromStyleAttr(node);
+    const nextColor = inlineColor || inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+
+    if (tagName === 'br') {
+      out.push({
+        text: '\n',
+        color: nextColor
+      });
+      return;
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => {
+      appendClaudeCodeInlinesFromNode(child, nextColor, out);
+    });
+  }
+
+  function appendGrokCodeInlinesFromNode(node, inheritedColor, out) {
+    if (!node) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (!text) {
+        return;
+      }
+      out.push({
+        text: text,
+        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const tagName = (node.tagName || '').toLowerCase();
+    const inlineColor = resolveInlineColorFromStyleAttr(node);
+    const nextColor = inlineColor || inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+
+    if (tagName === 'br') {
+      out.push({
+        text: '\n',
+        color: nextColor
+      });
+      return;
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => {
+      appendGrokCodeInlinesFromNode(child, nextColor, out);
+    });
+  }
+
+  function appendGeminiCodeInlinesFromNode(node, inheritedColor, out) {
+    if (!node) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (!text) {
+        return;
+      }
+      out.push({
+        text: text,
+        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const tagName = (node.tagName || '').toLowerCase();
+    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    const className = ensureString(node.className);
+    if (/(?:^|\s)hljs-[\w-]+(?:\s|$)/.test(className)) {
+      const computedColor = normalizePdfColorValue(
+        ensureString(window.getComputedStyle(node).color)
+      );
+      if (computedColor) {
+        nextColor = computedColor;
+      }
+    }
+
+    if (tagName === 'br') {
+      out.push({
+        text: '\n',
+        color: nextColor
+      });
+      return;
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => {
+      appendGeminiCodeInlinesFromNode(child, nextColor, out);
+    });
+  }
+
+  function appendDeepSeekCodeInlinesFromNode(node, inheritedColor, out) {
+    if (!node) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (!text) {
+        return;
+      }
+      out.push({
+        text: text,
+        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const tagName = (node.tagName || '').toLowerCase();
+    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    if (tagName === 'span') {
+      const className = ensureString(node.className);
+      const hasPrismTokenClass = /(?:^|\s)token(?:\s|$)/.test(className);
+      if (hasPrismTokenClass || className) {
+        const computedColor = normalizePdfColorValue(
+          ensureString(window.getComputedStyle(node).color)
+        );
+        if (computedColor) {
+          nextColor = computedColor;
+        }
+      }
+    }
+
+    if (tagName === 'br') {
+      out.push({
+        text: '\n',
+        color: nextColor
+      });
+      return;
+    }
+
+    Array.from(node.childNodes || []).forEach((child) => {
+      appendDeepSeekCodeInlinesFromNode(child, nextColor, out);
+    });
+  }
+
+  function resolveInlineColorFromStyleAttr(node) {
+    if (!node || !node.getAttribute) {
+      return '';
+    }
+    const styleAttr = ensureString(node.getAttribute('style'));
+    if (styleAttr) {
+      const match = styleAttr.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
+      if (match && match[1]) {
+        const normalized = normalizePdfColorValue(match[1]);
+        if (normalized) {
+          return normalized;
+        }
+      }
+    }
+    const inlineStyleColor = ensureString(node.style && node.style.color).trim();
+    const normalizedInline = normalizePdfColorValue(inlineStyleColor);
+    if (normalizedInline) {
+      return normalizedInline;
+    }
+    try {
+      const computedColor = ensureString(window.getComputedStyle(node).color).trim();
+      return normalizePdfColorValue(computedColor);
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function normalizePdfColorValue(colorValue) {
+    const raw = ensureString(colorValue).trim();
+    if (!raw) {
+      return '';
+    }
+    const hexMatch = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hexMatch) {
+      if (hexMatch[1].length === 3) {
+        const shortHex = hexMatch[1].toLowerCase();
+        return `#${shortHex[0]}${shortHex[0]}${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}`;
+      }
+      return `#${hexMatch[1].toLowerCase()}`;
+    }
+    const rgbMatch = raw.match(/^rgba?\(([^)]+)\)$/i);
+    if (!rgbMatch) {
+      return '';
+    }
+    const channels = rgbMatch[1]
+      .split(/[,\s/]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (channels.length < 3) {
+      return '';
+    }
+    const r = normalizeRgbChannel(channels[0]);
+    const g = normalizeRgbChannel(channels[1]);
+    const b = normalizeRgbChannel(channels[2]);
+    if (r === null || g === null || b === null) {
+      return '';
+    }
+    return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
+  }
+
+  function normalizeRgbChannel(value) {
+    const raw = ensureString(value).trim();
+    if (!raw) {
+      return null;
+    }
+    if (raw.endsWith('%')) {
+      const percentage = Number.parseFloat(raw.slice(0, -1));
+      if (!Number.isFinite(percentage)) {
+        return null;
+      }
+      const scaled = Math.round((Math.max(0, Math.min(100, percentage)) / 100) * 255);
+      return scaled;
+    }
+    const numeric = Number.parseFloat(raw);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+    return Math.max(0, Math.min(255, Math.round(numeric)));
+  }
+
+  function channelToHex(value) {
+    return value.toString(16).padStart(2, '0');
+  }
+
+  function mergeCodeRichInlines(parts) {
+    const merged = [];
+    (parts || []).forEach((part) => {
+      if (!part || typeof part.text !== 'string' || !part.text) {
+        return;
+      }
+      const previous = merged[merged.length - 1];
+      if (
+        previous &&
+        previous.color === part.color &&
+        previous.text !== '\n' &&
+        part.text !== '\n'
+      ) {
+        previous.text += part.text;
+        return;
+      }
+      merged.push({
+        text: part.text,
+        color: part.color || PDF_CODE_DEFAULT_TEXT_COLOR
+      });
+    });
+    return merged;
+  }
+
   function isSpecialCodeBlockElement(node) {
     if (!node || !node.matches) {
       return false;
@@ -2865,6 +3528,25 @@ License: MIT
     if (node.matches('#code-block-viewer')) {
       return true; // ChatGPT fallback
     }
+    if (
+      platform === 'deepseek' &&
+      node.matches('pre, code') &&
+      (
+        node.querySelector('span.token, span[class*="token "]') ||
+        /(?:^|\s)language-[\w+.-]+(?:\s|$)/i.test(ensureString(node.className))
+      )
+    ) {
+      return true; // DeepSeek Prism direct pre/code
+    }
+    if (
+      node.matches('code-block, div.code-block') &&
+      (
+        node.querySelector('code[data-test-id="code-content"]') ||
+        node.querySelector('.formatted-code-block-internal-container pre code')
+      )
+    ) {
+      return true; // Gemini
+    }
     if (node.matches('div.md-code-block, div[class*="md-code-block"]')) {
       return true; // DeepSeek
     }
@@ -2878,7 +3560,47 @@ License: MIT
   }
 
   function extractCodeBlockLanguage(node) {
+    if (platform === 'chatgpt') {
+      const chatGptHeader =
+        node.querySelector('div.text-token-text-primary') ||
+        node.querySelector('.text-token-text-primary');
+      if (chatGptHeader) {
+        const value = normalizeText(chatGptHeader.textContent || '');
+        if (value) {
+          return value;
+        }
+      }
+    }
+    if (platform === 'gemini') {
+      const geminiHeader =
+        querySelectorScoped(node, ':scope > .code-block > .code-block-decoration span') ||
+        querySelectorScoped(node, ':scope > .code-block-decoration span') ||
+        node.querySelector('.code-block-decoration.header-formatted span') ||
+        node.querySelector('.code-block-decoration span') ||
+        node.querySelector('.code-block-decoration');
+      if (geminiHeader) {
+        const value = normalizeText(geminiHeader.textContent || '');
+        if (value) {
+          return value;
+        }
+      }
+    }
+    if (platform === 'deepseek') {
+      const deepSeekContainer = (node.closest && node.closest('.md-code-block')) || node;
+      const deepSeekHeader =
+        deepSeekContainer.querySelector('.md-code-block-banner .d813de27') ||
+        deepSeekContainer.querySelector('.md-code-block-banner [class*="d813de27"]') ||
+        deepSeekContainer.querySelector('.code-info-button-text');
+      if (deepSeekHeader) {
+        const value = normalizeText(deepSeekHeader.textContent || '');
+        if (value && !/^(copy|download|copier|télécharger)$/i.test(value)) {
+          return value;
+        }
+      }
+    }
+
     const explicitLanguage =
+      node.querySelector('.code-block-decoration span') ||
       node.querySelector('.text-text-500') ||
       node.querySelector('.md-code-block-banner .d813de27') ||
       node.querySelector('.md-code-block-banner [class*="d813de27"]') ||
@@ -2920,6 +3642,15 @@ License: MIT
   }
 
   function extractCodeBlockText(node) {
+    const geminiCodeNode =
+      querySelectorScoped(node, ':scope > .code-block > .formatted-code-block-internal-container > pre > code[data-test-id="code-content"]') ||
+      querySelectorScoped(node, ':scope > .formatted-code-block-internal-container > pre > code[data-test-id="code-content"]') ||
+      querySelectorScoped(node, ':scope > pre > code[data-test-id="code-content"]') ||
+      node.querySelector('code[data-test-id="code-content"]');
+    if (geminiCodeNode) {
+      return normalizeCodeText(geminiCodeNode.innerText || geminiCodeNode.textContent || '');
+    }
+
     const scopedCodeNode =
       querySelectorScoped(node, ':scope > .overflow-x-auto > pre > code') ||
       querySelectorScoped(node, ':scope > pre > code') ||
@@ -2976,6 +3707,86 @@ License: MIT
       .replace(/[ \t]{2,}/g, ' ')
       .trim();
     return { text: formatPdfTextWithEmoji(raw) };
+  }
+
+  function buildListItemPdfContent(parts, fallbackText) {
+    const flattened = flattenPdfParts(parts).filter(Boolean);
+    const hasBlockChildren = flattened.some((part) => !isInlinePdfTextPart(part));
+    if (!hasBlockChildren) {
+      return forceInlinePdfText(flattened, fallbackText);
+    }
+    const stack = composeMixedPdfStack(flattened, fallbackText);
+    if (stack.length === 1) {
+      return stack[0];
+    }
+    return { stack: stack };
+  }
+
+  function composeMixedPdfStack(parts, fallbackText) {
+    const flattened = flattenPdfParts(parts).filter(Boolean);
+    const stack = [];
+    let inlineBuffer = [];
+
+    const flushInline = () => {
+      if (!inlineBuffer.length) {
+        return;
+      }
+      const inline = buildInlinePdfText(inlineBuffer);
+      if (inline) {
+        stack.push(inline);
+      } else {
+        const fallbackInlineText = normalizeText(extractPlainTextFromPdfParts(inlineBuffer));
+        if (fallbackInlineText) {
+          stack.push({ text: formatPdfTextWithEmoji(fallbackInlineText) });
+        }
+      }
+      inlineBuffer = [];
+    };
+
+    flattened.forEach((part) => {
+      if (isInlinePdfTextPart(part)) {
+        inlineBuffer.push(part);
+        return;
+      }
+      flushInline();
+      stack.push(part);
+    });
+
+    flushInline();
+
+    if (!stack.length) {
+      const raw = normalizeText(ensureString(fallbackText));
+      if (raw) {
+        stack.push({ text: formatPdfTextWithEmoji(raw) });
+      }
+    }
+
+    return stack;
+  }
+
+  function extractPlainTextFromPdfParts(parts) {
+    return (parts || [])
+      .map((part) => extractPlainTextFromPdfValue(part))
+      .join(' ');
+  }
+
+  function extractPlainTextFromPdfValue(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => extractPlainTextFromPdfValue(entry)).join('');
+    }
+    if (typeof value === 'object') {
+      if (Object.prototype.hasOwnProperty.call(value, 'text')) {
+        return extractPlainTextFromPdfValue(value.text);
+      }
+      return '';
+    }
+    return '';
   }
 
   function buildPdfTableFromHtmlTable(tableNode) {
@@ -3285,7 +4096,11 @@ License: MIT
     const thisIsCodeBlock = inCodeBlock || isPdfCodeBlockNode(next);
 
     if (Object.prototype.hasOwnProperty.call(next, 'text')) {
-      next.text = normalizePdfTextValue(next.text, thisIsCodeBlock);
+      next.text = normalizePdfTextValue(
+        next.text,
+        thisIsCodeBlock,
+        Boolean(next.preserveLeadingSpaces)
+      );
     }
     if (Array.isArray(next.stack)) {
       next.stack = next.stack.map((entry) => normalizeGrokPdfContentNode(entry, thisIsCodeBlock));
@@ -3313,21 +4128,25 @@ License: MIT
     return next;
   }
 
-  function normalizePdfTextValue(value, inCodeBlock) {
+  function normalizePdfTextValue(value, inCodeBlock, keepWhitespace) {
     if (value === null || value === undefined) {
       return value;
     }
     if (typeof value === 'string') {
-      return inCodeBlock ? value : normalizePdfPipelineText(value);
+      if (inCodeBlock || keepWhitespace) {
+        return value;
+      }
+      return normalizePdfPipelineText(value);
     }
     if (Array.isArray(value)) {
-      return value.map((entry) => normalizePdfTextValue(entry, inCodeBlock));
+      return value.map((entry) => normalizePdfTextValue(entry, inCodeBlock, keepWhitespace));
     }
     if (typeof value === 'object') {
       const next = Object.assign({}, value);
       const nestedCodeBlock = inCodeBlock || isPdfCodeBlockNode(next);
       if (Object.prototype.hasOwnProperty.call(next, 'text')) {
-        next.text = normalizePdfTextValue(next.text, nestedCodeBlock);
+        const keepTextWhitespace = keepWhitespace || Boolean(next.preserveLeadingSpaces);
+        next.text = normalizePdfTextValue(next.text, nestedCodeBlock, keepTextWhitespace);
       }
       return next;
     }
@@ -3407,7 +4226,7 @@ License: MIT
         const roleLabel = wrapRoleLabel(message.role);
         const messageText = ensureString(message.text);
         const htmlContent = message.html || messageText;
-        const richContent = message.pdf || convertHtmlToPdfMake(htmlContent);
+        const richContent = convertHtmlToPdfMake(htmlContent);
         const normalizedRichContent = normalizePdfContentForPlatform(richContent);
         const emojiRichContent = applyEmojiFontToTree(normalizedRichContent);
         const richContentStack = Array.isArray(emojiRichContent) ? emojiRichContent : [emojiRichContent];
@@ -3904,7 +4723,7 @@ License: MIT
     if (!emojiRegexRef) {
       try {
         emojiRegexRef = new RegExp(
-          '[\\p{Extended_Pictographic}\\u{1F1E6}-\\u{1F1FF}\\u{1F3FB}-\\u{1F3FF}\\u{FE0F}\\u{20E3}\\u{200D}]',
+          '(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator}|\\p{Emoji_Modifier}|\\u{FE0F}|\\u{20E3}|\\u{200D})',
           'u'
         );
       } catch (err) {
