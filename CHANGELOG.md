@@ -7,6 +7,25 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.0.1] - 2026-02-28
+
+### Added
+- Implemented full Gemini code block rendering
+- Added syntax color styling for code across all supported AIs
+- Added support for `<br>` and `<blockquote>` in PDF rendering
+
+### Improved
+- Major PDF rendering upgrade
+- Improved block code display in PDF
+- Refined JSON export structure
+
+### Fixed
+- Fixed invisible text issue in ChatGPT lists
+- Corrected list bullet formatting in PDF output
+- Regex issues related to emoji character classes
+- Formatting inconsistencies in PDF output
+
+
 ## [1.0.0] - 2026-02-27
 
 ### Added
