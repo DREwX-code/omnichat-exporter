@@ -184,9 +184,16 @@ Licenses:
 
 ## Installation
 
-1. Install a userscript manager such as [Tampermonkey](https://www.tampermonkey.net/).
-2. Install the script from [GreasyFork](https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly).
+[![Install](https://img.shields.io/badge/Install-OmniChat%20Exporter-2f7d32?style=for-the-badge&logo=greasyfork&logoColor=white)](https://update.greasyfork.org/scripts/567743/OmniChat%20Exporter%20-%20Export%20Any%20AI%20Chat%20Instantly.user.js)
+[![View Source](https://img.shields.io/badge/View-Source%20Code-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DREwX-code/omnichat-exporter/blob/main/src/omnichat-exporter.user.js)
+
+1. Install a userscript manager such as **Tampermonkey**  
+   https://www.tampermonkey.net/
+
+2. Click **Install OmniChat Exporter** above or install from [GreasyFork](https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly).
+
 3. Open a supported AI platform.
+
 4. Use the export controls directly in the interface.
 
 ---
