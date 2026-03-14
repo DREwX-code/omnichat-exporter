@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.0.1
+// @version      1.1.0
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -99,7 +99,12 @@
 // @match        https://grok.x.ai/*
 // @match        https://chat.deepseek.com/*
 
-// @grant        none
+// @grant GM_xmlhttpRequest
+// @connect raw.githubusercontent.com
+// @connect esm.sh
+// @connect cdn.jsdelivr.net
+// @connect github.com
+
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js
 // @run-at       document-idle
@@ -121,20 +126,49 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+*/
 
----
 
-Third-Party Libraries:
+/*
 
-PDF Generation (pdfmake):
+Third-Party Libraries used by this userscript
+=============================================
 
-This project uses pdfmake to generate PDF files directly in the browser.
+PDF generation — pdfmake
+------------------------
+
+Used to generate PDF files directly in the browser.
 No chat content is sent to any external PDF service.
 
 Website: https://pdfmake.github.io/docs/
 CDN: https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js
+Virtual fonts: https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js
 Source: https://github.com/bpampuch/pdfmake
 License: MIT
+
+
+Language detection — franc-min
+------------------------------
+
+Used to detect the primary language of exported chat text locally.
+
+Source: https://github.com/wooorm/franc/tree/main/packages/franc-min
+License: MIT
+
+
+Font resources
+--------------
+
+Noto fonts may be downloaded on demand to ensure full script coverage during PDF export.
+Fonts are fetched from upstream open-source repositories only when a matching script is detected.
+
+Sources:
+- https://github.com/notofonts
+- https://github.com/google/fonts
+
+Licenses:
+- SIL Open Font License 1.1
+- Apache License 2.0 (depending on the font family)
 
 */
 
@@ -150,7 +184,8 @@ License: MIT
 
   const STYLE_ID = 'omni-exporter-style';
   const EXPORT_BUTTON_CLASS = 'omni-exporter-btn';
-  const SHARE_BUTTON_SELECTOR = '[aria-label="Partager"], [aria-label="Share"]';
+  const SHARE_BUTTON_SELECTOR =
+    'button[data-testid="copy-turn-action-button"], button[data-testid="share-chat-button"], [aria-label="Partager"], [aria-label="Share"]';
   const TURN_SELECTOR = '[data-testid^="conversation-turn"]';
   const HEADER_ACTIONS_SELECTOR = '#conversation-header-actions';
   const HEADER_EXPORT_ATTR = 'data-omni-export-header';
@@ -172,6 +207,8 @@ License: MIT
   const GEMINI_TURN_HOST_ATTR = 'data-omni-gemini-turn-host';
   const GEMINI_SHARE_BUTTON_SELECTOR =
     'button[data-test-id="share-and-export-menu-button"], button[data-test-id="share-button"], button[aria-label*="Partager et exporter"], button[aria-label*="Share and export"], button[aria-label*="Partager la conversation"], button[aria-label*="Share conversation"]';
+  const GEMINI_MENU_BUTTON_SELECTOR =
+    'button[data-test-id="more-menu-button"], button[data-test-id="conversation-actions-menu-icon-button"]';
   const GEMINI_HEADER_SELECTOR = '.buttons-container.share';
   const GEMINI_THREAD_EXPORT_ATTR = 'data-omni-export-gemini-thread';
   const GEMINI_THREAD_NATIVE_ATTR = 'data-omni-gemini-native-thread';
@@ -196,22 +233,461 @@ License: MIT
   const MENU_ITEM_CLASS = 'omni-exporter-menu-item';
   const MENU_OPEN_CLASS = 'omni-exporter-menu-open';
   const STATUS_DURATION_MS = 1400;
-  const PDF_EMOJI_FONT_FAMILY = 'NotoEmoji';
-  const PDF_EMOJI_FONT_FILE = 'NotoEmoji-Regular.ttf';
+  const PDF_EXPORT_LOADER_ID = 'omni-exporter-pdf-loader';
+  const PDF_EXPORT_LOADER_STAGE_ATTR = 'data-omni-pdf-stage';
+  const PDF_LANGUAGE_DETECTOR_URL = 'https://esm.sh/franc-min@6.2.0/es2022/franc-min.bundle.mjs';
+  const PDF_LANGUAGE_SAMPLE_LIMIT = 180;
+  const PDF_LANGUAGE_SAMPLE_LENGTH = 1600;
+  const PDF_LANGUAGE_MIN_LENGTH = 24;
+  const PDF_ENABLE_EMOJI_FONT = true;
+  const PDF_EMOJI_FONT_FAMILY = 'OpenMojiBlack';
+  const PDF_EMOJI_FONT_FILE = 'OpenMoji-black-glyf.ttf';
   const PDF_CODE_DEFAULT_TEXT_COLOR = '#f8fafc';
   const NON_EXPORTABLE_NODE_SELECTOR =
     'button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"], ' +
-    '.cdk-visually-hidden, .visually-hidden, .sr-only, [aria-hidden="true"], [hidden]';
+    '.cdk-visually-hidden, .visually-hidden, .sr-only, [hidden]';
   const PDF_EMOJI_FONT_URLS = [
-    'https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoEmoji-Regular.ttf'
+    'https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/font/OpenMoji-black-glyf/OpenMoji-black-glyf.ttf'
   ];
+  const PDF_SCRIPT_FONT_SPECS = {
+    symbolsText: {
+      family: 'NotoSansSymbols',
+      file: 'NotoSansSymbols-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSymbols/NotoSansSymbols-Regular.ttf'
+      ]
+    },
+    latinExtended: {
+      family: 'NotoSansExtended',
+      file: 'NotoSans-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf'
+      ]
+    },
+    greek: {
+      family: 'NotoSansGreek',
+      file: 'NotoSans-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf'
+      ]
+    },
+    cyrillic: {
+      family: 'NotoSansCyrillic',
+      file: 'NotoSans-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf'
+      ]
+    },
+    chinese: {
+      family: 'NotoSansSC',
+      file: 'NotoSansCJKsc-Regular.otf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf'
+      ]
+    },
+    japanese: {
+      family: 'NotoSansJP',
+      file: 'NotoSansCJKjp-Regular.otf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf'
+      ]
+    },
+    korean: {
+      family: 'NotoSansKR',
+      file: 'NotoSansCJKkr-Regular.otf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'
+      ]
+    },
+    arabic: {
+      family: 'NotoSansArabic',
+      file: 'NotoSansArabic-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf'
+      ]
+    },
+    devanagari: {
+      family: 'Hind',
+      file: 'Hind-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Regular.ttf'
+      ]
+    },
+    bengali: {
+      family: 'NotoSansBengali',
+      file: 'NotoSansBengali-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf'
+      ]
+    },
+    gurmukhi: {
+      family: 'NotoSansGurmukhi',
+      file: 'NotoSansGurmukhi-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansGurmukhi/NotoSansGurmukhi-Regular.ttf'
+      ]
+    },
+    gujarati: {
+      family: 'NotoSansGujarati',
+      file: 'NotoSansGujarati-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansGujarati/NotoSansGujarati-Regular.ttf'
+      ]
+    },
+    odia: {
+      family: 'NotoSansOriya',
+      file: 'NotoSansOriya-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansOriya/NotoSansOriya-Regular.ttf'
+      ]
+    },
+    tamil: {
+      family: 'NotoSansTamil',
+      file: 'NotoSansTamil-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansTamil/NotoSansTamil-Regular.ttf'
+      ]
+    },
+    telugu: {
+      family: 'Mandali',
+      file: 'Mandali-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/google/fonts/main/ofl/mandali/Mandali-Regular.ttf'
+      ]
+    },
+    kannada: {
+      family: 'NotoSansKannada',
+      file: 'NotoSansKannada-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansKannada/NotoSansKannada-Regular.ttf'
+      ]
+    },
+    malayalam: {
+      family: 'NotoSansMalayalam',
+      file: 'NotoSansMalayalam-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansMalayalam/NotoSansMalayalam-Regular.ttf'
+      ]
+    },
+    sinhala: {
+      family: 'NotoSansSinhala',
+      file: 'NotoSansSinhala-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSinhala/NotoSansSinhala-Regular.ttf'
+      ]
+    },
+    thai: {
+      family: 'NotoSansThai',
+      file: 'NotoSansThai-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf'
+      ]
+    },
+    lao: {
+      family: 'NotoSansLao',
+      file: 'NotoSansLao-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansLao/NotoSansLao-Regular.ttf'
+      ]
+    },
+    khmer: {
+      family: 'NotoSansKhmer',
+      file: 'NotoSansKhmer-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansKhmer/NotoSansKhmer-Regular.ttf'
+      ]
+    },
+    myanmar: {
+      family: 'NotoSansMyanmar',
+      file: 'NotoSansMyanmar-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansMyanmar/NotoSansMyanmar-Regular.ttf'
+      ]
+    },
+    hebrew: {
+      family: 'NotoSansHebrew',
+      file: 'NotoSansHebrew-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansHebrew/NotoSansHebrew-Regular.ttf'
+      ]
+    },
+    armenian: {
+      family: 'NotoSansArmenian',
+      file: 'NotoSansArmenian-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansArmenian/NotoSansArmenian-Regular.ttf'
+      ]
+    },
+    georgian: {
+      family: 'NotoSansGeorgian',
+      file: 'NotoSansGeorgian-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansGeorgian/NotoSansGeorgian-Regular.ttf'
+      ]
+    },
+    ethiopic: {
+      family: 'NotoSansEthiopic',
+      file: 'NotoSansEthiopic-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansEthiopic/NotoSansEthiopic-Regular.ttf'
+      ]
+    },
+    egyptianHieroglyphs: {
+      family: 'NotoSansEgyptianHieroglyphs',
+      file: 'NotoSansEgyptianHieroglyphs-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansEgyptianHieroglyphs/NotoSansEgyptianHieroglyphs-Regular.ttf'
+      ]
+    }
+  };
+  const PDF_SCRIPT_DETECTION_PATTERNS = {
+    symbolsText: /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u,
+    latin: /[A-Za-z\u00C0-\u024F]/u,
+    latinExtended: /[\u0100-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F]/u,
+    chinese: /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u,
+    japanese: /[\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF]/u,
+    korean: /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/u,
+    arabic: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u,
+    devanagari: /[\u0900-\u097F\uA8E0-\uA8FF]/u,
+    bengali: /[\u0980-\u09FF]/u,
+    gurmukhi: /[\u0A00-\u0A7F]/u,
+    gujarati: /[\u0A80-\u0AFF]/u,
+    odia: /[\u0B00-\u0B7F]/u,
+    tamil: /[\u0B80-\u0BFF]/u,
+    telugu: /[\u0C00-\u0C7F]/u,
+    kannada: /[\u0C80-\u0CFF]/u,
+    malayalam: /[\u0D00-\u0D7F]/u,
+    sinhala: /[\u0D80-\u0DFF]/u,
+    thai: /[\u0E00-\u0E7F]/u,
+    lao: /[\u0E80-\u0EFF]/u,
+    myanmar: /[\u1000-\u109F\uA9E0-\uA9FF\uAA60-\uAA7F]/u,
+    georgian: /[\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F]/u,
+    ethiopic: /[\u1200-\u137F\u1380-\u139F\u2D80-\u2DDF\uAB00-\uAB2F]/u,
+    khmer: /[\u1780-\u17FF\u19E0-\u19FF]/u,
+    armenian: /[\u0530-\u058F\uFB13-\uFB17]/u,
+    hebrew: /[\u0590-\u05FF\uFB1D-\uFB4F]/u,
+    egyptianHieroglyphs: /[\u{13000}-\u{1345F}]/u,
+    greek: /[\u0370-\u03FF\u1F00-\u1FFF]/u,
+    cyrillic: /[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]/u
+  };
+  const PDF_DIRECT_SCRIPT_SCAN_ORDER = [
+    'symbolsText',
+    'latinExtended',
+    'arabic',
+    'devanagari',
+    'bengali',
+    'gurmukhi',
+    'gujarati',
+    'odia',
+    'tamil',
+    'telugu',
+    'kannada',
+    'malayalam',
+    'sinhala',
+    'thai',
+    'lao',
+    'myanmar',
+    'khmer',
+    'hebrew',
+    'armenian',
+    'georgian',
+    'ethiopic',
+    'egyptianHieroglyphs',
+    'greek',
+    'cyrillic'
+  ];
+  const PDF_SCRIPT_RESOURCE_LABELS = {
+    symbolsText: 'Symbols font',
+    latinExtended: 'Extended Latin font',
+    chinese: 'Chinese font',
+    japanese: 'Japanese font',
+    korean: 'Korean font',
+    arabic: 'Arabic font',
+    devanagari: 'Devanagari font',
+    bengali: 'Bengali font',
+    gurmukhi: 'Gurmukhi font',
+    gujarati: 'Gujarati font',
+    odia: 'Odia font',
+    tamil: 'Tamil font',
+    telugu: 'Telugu font',
+    kannada: 'Kannada font',
+    malayalam: 'Malayalam font',
+    sinhala: 'Sinhala font',
+    thai: 'Thai font',
+    lao: 'Lao font',
+    myanmar: 'Myanmar font',
+    khmer: 'Khmer font',
+    hebrew: 'Hebrew font',
+    armenian: 'Armenian font',
+    georgian: 'Georgian font',
+    ethiopic: 'Amharic / Ethiopic font',
+    egyptianHieroglyphs: 'Egyptian hieroglyph font',
+    greek: 'Greek font',
+    cyrillic: 'Cyrillic font',
+    emoji: 'Emoji / symbols font'
+  };
+  const PDF_SCRIPT_FALLBACK_LANGUAGE_MAP = {
+    chinese: 'zh',
+    japanese: 'ja',
+    korean: 'ko',
+    arabic: 'ar',
+    devanagari: 'hi',
+    bengali: 'bn',
+    gurmukhi: 'pa',
+    gujarati: 'gu',
+    odia: 'or',
+    tamil: 'ta',
+    telugu: 'te',
+    kannada: 'kn',
+    malayalam: 'ml',
+    sinhala: 'si',
+    thai: 'th',
+    lao: 'lo',
+    myanmar: 'my',
+    khmer: 'km',
+    hebrew: 'he',
+    armenian: 'hy',
+    georgian: 'ka',
+    ethiopic: 'am',
+    greek: 'el',
+    cyrillic: 'ru'
+  };
+  const PDF_SCRIPT_FALLBACK_PRIORITY = [
+    'japanese',
+    'korean',
+    'chinese',
+    'arabic',
+    'devanagari',
+    'bengali',
+    'gurmukhi',
+    'gujarati',
+    'odia',
+    'tamil',
+    'telugu',
+    'kannada',
+    'malayalam',
+    'sinhala',
+    'thai',
+    'lao',
+    'myanmar',
+    'khmer',
+    'hebrew',
+    'armenian',
+    'georgian',
+    'ethiopic',
+    'greek',
+    'cyrillic',
+    'latin'
+  ];
+  const PDF_SCRIPT_FONT_RETRY_ORDER = [
+    'arabic',
+    'devanagari',
+    'bengali',
+    'gurmukhi',
+    'gujarati',
+    'odia',
+    'tamil',
+    'telugu',
+    'kannada',
+    'malayalam',
+    'sinhala',
+    'thai',
+    'lao',
+    'myanmar',
+    'khmer',
+    'hebrew',
+    'ethiopic',
+    'armenian',
+    'georgian',
+    'japanese',
+    'korean',
+    'chinese',
+    'cyrillic'
+  ];
+  const PDF_HAN_PATTERN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u;
+  const PDF_CJK_SYMBOL_PATTERN = /[\u3000-\u303F\uFF00-\uFFEF]/u;
+  const PDF_SYMBOL_TEXT_PATTERN = /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
+  const PDF_EMOJI_STYLE_PATTERN = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u{FE0F}|\u{20E3}|\u{200D}|[\u{1F100}-\u{1F2FF}])/u;
+  const PDF_SAFE_SEGMENTATION_SCRIPTS = [];
+  const PDF_LATIN_COMBINING_MARK_PATTERN = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF]/u;
+  const PDF_TOKEN_BREAK_PATTERN = /[\s\u0000-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u2000-\u206F\u3000-\u303F]/u;
+  const PDF_LANGUAGE_CODE_MAP = {
+    amh: 'am',
+    afr: 'af',
+    ara: 'ar',
+    arb: 'ar',
+    arm: 'hy',
+    ben: 'bn',
+    bul: 'bg',
+    cat: 'ca',
+    ces: 'cs',
+    cmn: 'zh',
+    cym: 'cy',
+    dan: 'da',
+    deu: 'de',
+    ell: 'el',
+    eng: 'en',
+    est: 'et',
+    fas: 'fa',
+    fin: 'fi',
+    fra: 'fr',
+    guj: 'gu',
+    heb: 'he',
+    hin: 'hi',
+    hrv: 'hr',
+    hun: 'hu',
+    ind: 'id',
+    ita: 'it',
+    jav: 'jv',
+    jpn: 'ja',
+    kat: 'ka',
+    kan: 'kn',
+    khm: 'km',
+    kor: 'ko',
+    lao: 'lo',
+    lit: 'lt',
+    lvs: 'lv',
+    mal: 'ml',
+    mar: 'mr',
+    mya: 'my',
+    mon: 'mn',
+    nld: 'nl',
+    nep: 'ne',
+    nor: 'no',
+    npi: 'ne',
+    ori: 'or',
+    ory: 'or',
+    pan: 'pa',
+    pol: 'pl',
+    por: 'pt',
+    ron: 'ro',
+    rus: 'ru',
+    slk: 'sk',
+    slv: 'sl',
+    spa: 'es',
+    srp: 'sr',
+    sin: 'si',
+    swe: 'sv',
+    tam: 'ta',
+    tel: 'te',
+    tha: 'th',
+    tur: 'tr',
+    ukr: 'uk',
+    urd: 'ur',
+    vie: 'vi',
+    khk: 'mn',
+    hye: 'hy',
+    zho: 'zh'
+  };
   let iconCounter = 0;
   let activeMenu = null;
   let activeMenuButton = null;
   let menuCleanup = null;
   let pdfMakeRef = null;
+  let activePdfFontContext = null;
   let activePdfEmojiFontFamily = '';
-  let emojiFontBase64Promise = null;
+  let languageDetectorModulePromise = null;
+  let pdfFontBase64Promises = Object.create(null);
   let emojiRegexRef = null;
   let graphemeSegmenterRef = null;
 
@@ -336,6 +812,163 @@ License: MIT
   background-color: rgba(156, 154, 146, 0.15);
 }
 
+.omni-exporter-pdf-loader {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 2147483646;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.omni-exporter-pdf-loader-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(100%, 390px);
+  max-width: calc(100vw - 24px);
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.96);
+  color: #f8fafc;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.omni-exporter-pdf-loader-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+}
+
+.omni-exporter-pdf-loader-spinner {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid rgba(248, 250, 252, 0.2);
+  border-top-color: #38bdf8;
+  animation: omni-exporter-loader-spin 0.85s linear infinite;
+}
+
+.omni-exporter-pdf-loader-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.omni-exporter-pdf-loader-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: -4px -6px 0 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.omni-exporter-pdf-loader-close:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: #f8fafc;
+}
+
+.omni-exporter-pdf-loader-close:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 2px;
+}
+
+.omni-exporter-pdf-loader-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+}
+
+.omni-exporter-pdf-loader-stage {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.omni-exporter-pdf-loader-detail {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.omni-exporter-pdf-loader-progress {
+  width: 100%;
+}
+
+.omni-exporter-pdf-loader-progress-track {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.omni-exporter-pdf-loader-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8 0%, #22c55e 100%);
+  transition: width 0.18s ease;
+}
+
+.omni-exporter-pdf-loader-progress-track[data-indeterminate="true"] .omni-exporter-pdf-loader-progress-bar {
+  width: 38%;
+  animation: omni-exporter-loader-progress 1.1s ease-in-out infinite;
+}
+
+.omni-exporter-pdf-loader-progress-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+@media (max-width: 640px) {
+  .omni-exporter-pdf-loader-panel {
+    width: 100%;
+    padding: 14px 14px 13px;
+    border-radius: 14px;
+  }
+
+  .omni-exporter-pdf-loader-head {
+    gap: 12px;
+  }
+}
+
+@keyframes omni-exporter-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes omni-exporter-loader-progress {
+  0% {
+    transform: translateX(-115%);
+  }
+  100% {
+    transform: translateX(315%);
+  }
+}
+
 `;
 
   function buildExportIcon() {
@@ -379,6 +1012,166 @@ License: MIT
     style.id = STYLE_ID;
     style.textContent = styles;
     document.head.appendChild(style);
+  }
+
+  function showPdfExportLoader(stage) {
+    injectStyles();
+    let loader = document.getElementById(PDF_EXPORT_LOADER_ID);
+    if (!loader) {
+      loader = document.createElement('div');
+      loader.id = PDF_EXPORT_LOADER_ID;
+      loader.className = 'omni-exporter-pdf-loader';
+
+      const panel = document.createElement('div');
+      panel.className = 'omni-exporter-pdf-loader-panel';
+      panel.setAttribute('role', 'status');
+      panel.setAttribute('aria-live', 'polite');
+      panel.setAttribute('aria-busy', 'true');
+
+      const head = document.createElement('div');
+      head.className = 'omni-exporter-pdf-loader-head';
+
+      const spinner = document.createElement('div');
+      spinner.className = 'omni-exporter-pdf-loader-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+
+      const copy = document.createElement('div');
+      copy.className = 'omni-exporter-pdf-loader-copy';
+
+      const closeButton = document.createElement('button');
+      closeButton.className = 'omni-exporter-pdf-loader-close';
+      closeButton.type = 'button';
+      closeButton.setAttribute('aria-label', 'Close export loader');
+      closeButton.textContent = '×';
+      closeButton.addEventListener('click', () => {
+        loader.remove();
+      });
+
+      const title = document.createElement('div');
+      title.className = 'omni-exporter-pdf-loader-title';
+      title.textContent = 'Preparing PDF export...';
+
+      const stageNode = document.createElement('div');
+      stageNode.className = 'omni-exporter-pdf-loader-stage';
+
+      const detailNode = document.createElement('div');
+      detailNode.className = 'omni-exporter-pdf-loader-detail';
+
+      const progress = document.createElement('div');
+      progress.className = 'omni-exporter-pdf-loader-progress';
+
+      const track = document.createElement('div');
+      track.className = 'omni-exporter-pdf-loader-progress-track';
+      track.setAttribute('data-indeterminate', 'true');
+
+      const bar = document.createElement('div');
+      bar.className = 'omni-exporter-pdf-loader-progress-bar';
+
+      const meta = document.createElement('div');
+      meta.className = 'omni-exporter-pdf-loader-progress-meta';
+
+      track.appendChild(bar);
+      progress.appendChild(track);
+      progress.appendChild(meta);
+
+      copy.appendChild(title);
+      copy.appendChild(stageNode);
+      copy.appendChild(detailNode);
+      head.appendChild(spinner);
+      head.appendChild(copy);
+      head.appendChild(closeButton);
+      panel.appendChild(head);
+      panel.appendChild(progress);
+      loader.appendChild(panel);
+      document.body.appendChild(loader);
+    }
+    updatePdfExportLoader(stage || 'Scanning chat content...');
+    return loader;
+  }
+
+  function updatePdfExportLoader(state) {
+    const loader = document.getElementById(PDF_EXPORT_LOADER_ID);
+    if (!loader) {
+      return;
+    }
+    const next = normalizePdfExportLoaderState(state);
+    const stageNode = loader.querySelector('.omni-exporter-pdf-loader-stage');
+    const detailNode = loader.querySelector('.omni-exporter-pdf-loader-detail');
+    const progressTrack = loader.querySelector('.omni-exporter-pdf-loader-progress-track');
+    const progressBar = loader.querySelector('.omni-exporter-pdf-loader-progress-bar');
+    const progressMeta = loader.querySelector('.omni-exporter-pdf-loader-progress-meta');
+    if (stageNode) {
+      stageNode.textContent = next.stage;
+    }
+    if (detailNode) {
+      detailNode.textContent = next.detail;
+      detailNode.style.display = next.detail ? '' : 'none';
+    }
+    if (progressTrack) {
+      progressTrack.setAttribute('data-indeterminate', next.indeterminate ? 'true' : 'false');
+    }
+    if (progressBar) {
+      progressBar.style.width = next.indeterminate ? '38%' : `${Math.round(clampPdfLoaderProgress(next.progress) * 100)}%`;
+      progressBar.style.transform = next.indeterminate ? '' : 'translateX(0)';
+    }
+    if (progressMeta) {
+      progressMeta.textContent = next.progressText;
+      progressMeta.style.display = next.progressText ? '' : 'none';
+    }
+    loader.setAttribute(PDF_EXPORT_LOADER_STAGE_ATTR, next.stage);
+  }
+
+  function hidePdfExportLoader() {
+    const loader = document.getElementById(PDF_EXPORT_LOADER_ID);
+    if (loader) {
+      loader.remove();
+    }
+  }
+
+  function normalizePdfExportLoaderState(state) {
+    if (typeof state === 'string') {
+      return {
+        stage: ensureString(state || 'Preparing PDF export...'),
+        detail: '',
+        progress: 0,
+        progressText: '',
+        indeterminate: true
+      };
+    }
+    const next = state && typeof state === 'object' ? state : {};
+    return {
+      stage: ensureString(next.stage || 'Preparing PDF export...'),
+      detail: ensureString(next.detail),
+      progress: clampPdfLoaderProgress(next.progress),
+      progressText: ensureString(next.progressText),
+      indeterminate: next.indeterminate !== false
+    };
+  }
+
+  function clampPdfLoaderProgress(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    if (numeric < 0) {
+      return 0;
+    }
+    if (numeric > 1) {
+      return 1;
+    }
+    return numeric;
+  }
+
+  function waitForNextPaint() {
+    return new Promise((resolve) => {
+      if (typeof window.requestAnimationFrame !== 'function') {
+        window.setTimeout(resolve, 0);
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        window.setTimeout(resolve, 0);
+      });
+    });
   }
 
   function queueScanForNode(node) {
@@ -439,7 +1232,7 @@ License: MIT
       return element.closest(GEMINI_ACTIONS_SELECTOR) || element;
     }
     if (platform === 'claude') {
-      return element.closest(CLAUDE_ACTIONS_SELECTOR) ||
+      return getClaudeActionContainer(element) ||
         element.closest(CLAUDE_HEADER_SELECTOR) ||
         element;
     }
@@ -648,7 +1441,7 @@ License: MIT
     if (!container || !container.querySelector) {
       return null;
     }
-    const moreButton = container.querySelector('button[data-test-id="more-menu-button"]');
+    const moreButton = container.querySelector(GEMINI_MENU_BUTTON_SELECTOR);
     if (!moreButton) {
       return null;
     }
@@ -667,7 +1460,10 @@ License: MIT
     if (!buttons.length) {
       return null;
     }
-    const menuButton = buttons.find((button) => button.getAttribute('data-test-id') === 'more-menu-button');
+    const menuButton = buttons.find((button) => {
+      const testId = button.getAttribute('data-test-id');
+      return testId === 'more-menu-button' || testId === 'conversation-actions-menu-icon-button';
+    });
     if (menuButton) {
       return menuButton;
     }
@@ -826,11 +1622,7 @@ License: MIT
 
   function attachClaudeTurnButtons(root) {
     const scope = root || document;
-    const containers = [];
-    if (scope.matches && scope.matches(CLAUDE_ACTIONS_SELECTOR)) {
-      containers.push(scope);
-    }
-    containers.push(...scope.querySelectorAll(CLAUDE_ACTIONS_SELECTOR));
+    const containers = collectClaudeActionContainers(scope);
     containers.forEach((container) => {
       if (container.querySelector(`[${CLAUDE_TURN_EXPORT_ATTR}]`)) {
         return;
@@ -1258,11 +2050,22 @@ License: MIT
   }
 
   async function handleExportFormat(format, button) {
+    const isPdfExport = format === 'pdf';
+    if (isPdfExport) {
+      showPdfExportLoader({
+        stage: 'Scanning chat content...',
+        detail: 'Collecting messages before PDF generation.',
+        progress: 0.06,
+        progressText: 'Step 1 of 4',
+        indeterminate: false
+      });
+      await waitForNextPaint();
+    }
     try {
       const scope = button.getAttribute(EXPORT_SCOPE_ATTR) || 'turn';
       const anchorTurn = findAnchorTurn(button);
       if (scope !== 'thread' && !anchorTurn) {
-        flashButton(button, 'Err: Pas de message', 'error');
+        flashButton(button, 'Err: No message', 'error');
         return;
       }
       const turns = scope === 'thread' ? getAllTurns() : getRelatedTurns(anchorTurn);
@@ -1276,14 +2079,14 @@ License: MIT
       }
 
       if (!messages.length) {
-        flashButton(button, 'Err: 0 messages trouvés', 'error');
+        flashButton(button, 'Err: 0 messages found', 'error');
         console.warn('OmniChat: No messages found with selectors', turns);
         return;
       }
       if (format === 'pdf') {
         const exported = await exportPdf(messages);
         if (!exported) {
-          flashButton(button, 'Export indisponible', 'error');
+          flashButton(button, 'Export unavailable', 'error');
           return;
         }
         flashButton(button, 'Export ok', 'success');
@@ -1309,7 +2112,11 @@ License: MIT
       flashButton(button, 'Export ok', 'success');
     } catch (err) {
       console.error('OmniChat export error:', err);
-      flashButton(button, 'Export échoué', 'error');
+      flashButton(button, 'Export failed', 'error');
+    } finally {
+      if (isPdfExport) {
+        hidePdfExportLoader();
+      }
     }
   }
 
@@ -1498,7 +2305,7 @@ License: MIT
                 (node.matches && node.matches('.font-claude-response') ? 'assistant' : 'message'));
           const content = extractMessageContent(node);
           if (content && content.text) {
-            messages.push({ role, text: content.text, html: content.html });
+            messages.push(buildCollectedMessage(role, content));
           }
         });
         return;
@@ -1506,7 +2313,7 @@ License: MIT
       const role = inferRoleFromRoot(turn) || 'message';
       const content = extractMessageContentFromRoot(turn);
       if (content && content.text) {
-        messages.push({ role, text: content.text, html: content.html });
+        messages.push(buildCollectedMessage(role, content));
       }
     });
     return messages;
@@ -1528,7 +2335,7 @@ License: MIT
             inferRoleFromRoot(node) || 'message';
           const content = extractMessageContent(node);
           if (content && content.text) {
-            messages.push({ role, text: content.text, html: content.html });
+            messages.push(buildCollectedMessage(role, content));
           }
         });
         return;
@@ -1544,7 +2351,7 @@ License: MIT
 
         const content = extractMessageContent(node);
         if (content && content.text) {
-          messages.push({ role, text: content.text, html: content.html });
+          messages.push(buildCollectedMessage(role, content));
         }
       });
     };
@@ -1678,10 +2485,22 @@ License: MIT
         inferRoleFromRoot(node) || 'message';
       const content = extractMessageContent(node);
       if (content && content.text) {
-        messages.push({ role, text: content.text, html: content.html });
+        messages.push(buildCollectedMessage(role, content));
       }
     });
     return messages;
+  }
+
+  function buildCollectedMessage(role, content) {
+    const message = {
+      role: role,
+      text: ensureString(content && content.text),
+      html: ensureString(content && content.html)
+    };
+    if (content && content.sourceNode && content.sourceNode.nodeType === Node.ELEMENT_NODE) {
+      message.sourceNode = content.sourceNode;
+    }
+    return message;
   }
 
   function isAssistantSparse(messages) {
@@ -1706,11 +2525,56 @@ License: MIT
     if (direct) {
       return direct;
     }
-    const actions = button.closest(CLAUDE_ACTIONS_SELECTOR);
+    const actions = getClaudeActionContainer(button);
     if (!actions) {
       return null;
     }
     return findClaudeMessageForActions(actions);
+  }
+
+  function getClaudeActionContainer(element) {
+    if (!element || typeof element.closest !== 'function') {
+      return null;
+    }
+    const labeled = element.closest(CLAUDE_ACTIONS_SELECTOR);
+    if (labeled) {
+      return labeled;
+    }
+    const copyButton = (element.matches && element.matches(CLAUDE_COPY_SELECTOR))
+      ? element
+      : element.closest(CLAUDE_COPY_SELECTOR);
+    if (!copyButton) {
+      return null;
+    }
+    return copyButton.closest('[role="group"]') || copyButton.parentElement || null;
+  }
+
+  function collectClaudeActionContainers(scope) {
+    const containers = [];
+    const seen = new Set();
+    const pushContainer = (candidate) => {
+      if (!candidate || seen.has(candidate)) {
+        return;
+      }
+      seen.add(candidate);
+      containers.push(candidate);
+    };
+
+    if (scope && scope.nodeType === Node.ELEMENT_NODE) {
+      pushContainer(getClaudeActionContainer(scope));
+      if (scope.matches && scope.matches(CLAUDE_ACTIONS_SELECTOR)) {
+        pushContainer(scope);
+      }
+    }
+
+    if (scope && typeof scope.querySelectorAll === 'function') {
+      scope.querySelectorAll(CLAUDE_ACTIONS_SELECTOR).forEach(pushContainer);
+      scope.querySelectorAll(CLAUDE_COPY_SELECTOR).forEach((button) => {
+        pushContainer(getClaudeActionContainer(button));
+      });
+    }
+
+    return containers;
   }
 
   function getClaudeMessageRoots() {
@@ -1847,7 +2711,7 @@ License: MIT
     }
 
     const assistantRoots = Array.from(conversation.querySelectorAll(
-      'model-response message-content .markdown, model-response .model-response-text message-content .markdown, model-response .model-response-text'
+      'model-response message-content .markdown, model-response message-content'
     )).filter((node, index, self) => !self.some((other, otherIndex) => otherIndex !== index && other.contains(node)));
 
     assistantRoots.forEach((assistantRoot) => {
@@ -2243,28 +3107,33 @@ License: MIT
       ];
     } else if (platform === 'gemini') {
       const GEMINI_LEAF_SELECTOR =
-        'message-content, .markdown, .model-response-text, ' +
+        'message-content, .markdown, ' +
         '.query-text, .query-content, .user-query-bubble-with-background';
       if (root.matches && root.matches(GEMINI_LEAF_SELECTOR)) {
-        const exportNode = prepareNodeForExport(root);
+        const preferredLeaf =
+          (root.matches && root.matches('.markdown, .query-text, .user-query-bubble-with-background') ? root : null) ||
+          (root.querySelector && root.querySelector('.markdown, .query-text, .user-query-bubble-with-background')) ||
+          root;
+        const exportNode = prepareNodeForExport(preferredLeaf);
         const text = normalizeText(exportNode.innerText || '');
         if (text) {
           return {
             text,
-            html: cleanHtml(exportNode)
+            html: cleanHtml(exportNode),
+            sourceNode: preferredLeaf
           };
         }
       }
       selectors = [
         'message-content .markdown',
-        '.model-response-text message-content .markdown',
-        '.model-response-text',
+        'model-response message-content .markdown',
         'user-query-content .query-content .query-text',
-        'user-query-content .query-content',
         'user-query .query-text',
         '.query-content .query-text',
         '.query-text',
-        '.user-query-bubble-with-background'
+        '.user-query-bubble-with-background',
+        'model-response message-content',
+        'user-query-content .query-content'
       ];
     } else if (platform === 'grok') {
       const content = root.querySelector('.message-content, .message-row');
@@ -2296,12 +3165,17 @@ License: MIT
     const allNodes = Array.from(root.querySelectorAll(selectors.join(',')));
 
     const nodes = allNodes.filter((node, index, self) => {
-      const isContained = self.some(other => other !== node && other.contains(node));
+      if (platform === 'gemini') {
+        const containsOther = self.some((other) => other !== node && node.contains(other));
+        return !containsOther;
+      }
+      const isContained = self.some((other) => other !== node && other.contains(node));
       return !isContained;
     });
 
     const parts = [];
     const htmlParts = [];
+    const sourceNodes = [];
 
     nodes.forEach((node) => {
       if (node.closest('button, nav, header, footer, svg')) {
@@ -2313,13 +3187,15 @@ License: MIT
       if (text) {
         parts.push(text);
         htmlParts.push(html);
+        sourceNodes.push(node);
       }
     });
 
     if (parts.length) {
       return {
         text: parts.join('\n\n').trim(),
-        html: htmlParts.join('<br><br>').trim()
+        html: htmlParts.join('<br><br>').trim(),
+        sourceNode: sourceNodes.length === 1 ? sourceNodes[0] : null
       };
     }
 
@@ -2328,7 +3204,8 @@ License: MIT
     const fallbackHtml = cleanHtml(fallbackNode);
     return {
       text: stripActionLines(fallbackText, root),
-      html: fallbackHtml
+      html: fallbackHtml,
+      sourceNode: root
     };
   }
 
@@ -2394,7 +3271,8 @@ License: MIT
     const html = cleanHtml(exportNode);
     return {
       text: normalizeText(rawText),
-      html: html
+      html: html,
+      sourceNode: contentRoot
     };
   }
 
@@ -2452,10 +3330,461 @@ License: MIT
       const roleLabel = formatRoleLabel(message.role);
       lines.push(`## ${roleLabel}`);
       lines.push('');
-      lines.push(ensureString(message.text));
+      const markdownBody =
+        platform === 'gemini' &&
+        message &&
+        message.sourceNode &&
+        message.sourceNode.nodeType === Node.ELEMENT_NODE &&
+        message.sourceNode.isConnected
+          ? convertMessageNodeToMarkdown(message.sourceNode, message.text)
+          : convertMessageHtmlToMarkdown(message.html, message.text);
+      lines.push(markdownBody || ensureString(message.text));
       lines.push('');
     });
     return `${lines.join('\n').trim()}\n`;
+  }
+
+  function convertMessageNodeToMarkdown(sourceNode, fallbackText) {
+    if (!sourceNode || sourceNode.nodeType !== Node.ELEMENT_NODE) {
+      return normalizePlainMarkdownText(fallbackText);
+    }
+    const exportNode = prepareNodeForExport(sourceNode);
+    const markdown = renderMarkdownChildren(exportNode, { listDepth: 0, inPre: false, inTable: false });
+    return finalizeMarkdownOutput(markdown) || normalizePlainMarkdownText(fallbackText || exportNode.innerText || '');
+  }
+
+  function convertMessageHtmlToMarkdown(html, fallbackText) {
+    const rawHtml = ensureString(html);
+    if (!rawHtml || !/<[^>]+>/.test(rawHtml)) {
+      return normalizePlainMarkdownText(fallbackText || rawHtml);
+    }
+    const container = parseHtmlContainer(rawHtml);
+    if (!container) {
+      return normalizePlainMarkdownText(stripHtmlToText(rawHtml) || fallbackText);
+    }
+    stripNonExportableNodes(container);
+    const markdown = renderMarkdownChildren(container, { listDepth: 0, inPre: false, inTable: false });
+    return finalizeMarkdownOutput(markdown) || normalizePlainMarkdownText(fallbackText);
+  }
+
+  function renderMarkdownChildren(parentNode, ctx) {
+    return Array.from(parentNode.childNodes || [])
+      .map((child) => renderMarkdownNode(child, ctx))
+      .join('');
+  }
+
+  function renderMarkdownNode(node, ctx) {
+    if (!node) {
+      return '';
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      return renderMarkdownTextNode(node, ctx);
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+    if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
+      return '';
+    }
+
+    const tag = ensureString(node.tagName).toLowerCase();
+    const katexMode = detectKatexMode(node);
+    if (katexMode === 'display') {
+      const tex = extractLatexFromNode(node);
+      return tex ? `\n\n$$\n${tex}\n$$\n\n` : '';
+    }
+    if (katexMode === 'inline') {
+      const tex = extractLatexFromNode(node);
+      return tex ? `$${tex}$` : '';
+    }
+    if (tag === 'annotation' && ensureString(node.getAttribute('encoding')).toLowerCase() === 'application/x-tex') {
+      return '';
+    }
+
+    if (tag === 'br') {
+      return '\n';
+    }
+    if (tag === 'hr') {
+      return '\n\n---\n\n';
+    }
+    if (tag === 'pre') {
+      return renderMarkdownCodeBlock(node);
+    }
+    if (tag === 'code') {
+      if (node.closest('pre')) {
+        return '';
+      }
+      return wrapMarkdownInlineCode(node.textContent || '');
+    }
+    if (tag === 'table') {
+      return renderMarkdownTable(node, ctx);
+    }
+    if (tag === 'blockquote') {
+      const quoteBody = finalizeMarkdownOutput(renderMarkdownChildren(node, ctx));
+      if (!quoteBody) {
+        return '';
+      }
+      const quotedLines = quoteBody.split('\n').map((line) => line ? `> ${line}` : '>');
+      return `\n\n${quotedLines.join('\n')}\n\n`;
+    }
+    if (tag === 'ul' || tag === 'ol') {
+      return renderMarkdownList(node, tag === 'ol', ctx);
+    }
+    if (tag === 'li') {
+      return renderMarkdownListItem(node, ctx, '-');
+    }
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
+      const level = Number.parseInt(tag.slice(1), 10) || 1;
+      const heading = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+      if (!heading) {
+        return '';
+      }
+      return `\n\n${'#'.repeat(Math.max(1, Math.min(6, level)))} ${heading}\n\n`;
+    }
+    if (tag === 'p') {
+      const paragraph = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+      return paragraph ? `\n\n${paragraph}\n\n` : '';
+    }
+    if (tag === 'strong' || tag === 'b') {
+      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+      return content ? `**${content}**` : '';
+    }
+    if (tag === 'em' || tag === 'i') {
+      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+      return content ? `*${content}*` : '';
+    }
+    if (tag === 'del' || tag === 's' || tag === 'strike') {
+      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+      return content ? `~~${content}~~` : '';
+    }
+    if (tag === 'a') {
+      const href = ensureString(node.getAttribute('href')).trim();
+      const label = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx)) || href;
+      if (!href) {
+        return label;
+      }
+      return `[${label}](${href})`;
+    }
+    if (tag === 'img') {
+      const alt = escapeMarkdownText(ensureString(node.getAttribute('alt')).trim());
+      const src = ensureString(node.getAttribute('src')).trim();
+      if (!src) {
+        return alt;
+      }
+      return `![${alt}](${src})`;
+    }
+
+    const inner = renderMarkdownChildren(node, ctx);
+    if (isMarkdownBlockTag(tag)) {
+      const block = finalizeMarkdownOutput(inner);
+      return block ? `\n\n${block}\n\n` : '';
+    }
+    return inner;
+  }
+
+  function renderMarkdownTextNode(node, ctx) {
+    const raw = ensureString(node.textContent).replace(/\u00a0/g, ' ');
+    if (!raw) {
+      return '';
+    }
+    if (ctx && ctx.inPre) {
+      return raw;
+    }
+    return escapeMarkdownText(raw.replace(/[ \t\r\f\v]+/g, ' ').replace(/\n+/g, ' '));
+  }
+
+  function renderMarkdownCodeBlock(preNode) {
+    const codeNode = preNode.querySelector('code') || preNode;
+    const rawCode = ensureString(codeNode.textContent)
+      .replace(/\r\n/g, '\n')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+$/, '');
+    const language = extractMarkdownCodeLanguage(preNode, codeNode);
+    const fenceSize = Math.max(3, longestBacktickRun(rawCode) + 1);
+    const fence = '`'.repeat(fenceSize);
+    return `\n\n${fence}${language}\n${rawCode}\n${fence}\n\n`;
+  }
+
+  function wrapMarkdownInlineCode(text) {
+    const value = ensureString(text).replace(/\r\n/g, ' ').replace(/\n/g, ' ');
+    if (!value) {
+      return '``';
+    }
+    const fenceSize = Math.max(1, longestBacktickRun(value) + 1);
+    const fence = '`'.repeat(fenceSize);
+    if (/^\s|\s$/.test(value) || value.includes(fence)) {
+      return `${fence} ${value} ${fence}`;
+    }
+    return `${fence}${value}${fence}`;
+  }
+
+  function longestBacktickRun(text) {
+    const runs = ensureString(text).match(/`+/g);
+    if (!runs || !runs.length) {
+      return 0;
+    }
+    return runs.reduce((max, entry) => Math.max(max, entry.length), 0);
+  }
+
+  function renderMarkdownList(listNode, isOrdered, ctx) {
+    const depth = Number(ctx && ctx.listDepth) || 0;
+    const items = Array.from(listNode.children || []).filter((child) => {
+      return child && ensureString(child.tagName).toLowerCase() === 'li';
+    });
+    if (!items.length) {
+      return '';
+    }
+
+    const start = isOrdered ? parseListStartValue(listNode) : 1;
+    const nextCtx = Object.assign({}, ctx, { listDepth: depth });
+    const rendered = items.map((item, index) => {
+      const marker = isOrdered ? `${start + index}.` : '-';
+      return renderMarkdownListItem(item, nextCtx, marker);
+    }).filter(Boolean).join('\n');
+
+    if (!rendered) {
+      return '';
+    }
+    return depth > 0 ? `\n${rendered}\n` : `\n\n${rendered}\n\n`;
+  }
+
+  function renderMarkdownListItem(listItemNode, ctx, marker) {
+    const depth = Number(ctx && ctx.listDepth) || 0;
+    const indent = '  '.repeat(depth);
+    const continuationIndent = `${indent}${' '.repeat(marker.length + 1)}`;
+    const nestedCtx = Object.assign({}, ctx, { listDepth: depth + 1 });
+
+    let inlineBuffer = '';
+    const trailingBlocks = [];
+
+    Array.from(listItemNode.childNodes || []).forEach((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = ensureString(child.tagName).toLowerCase();
+        if (tag === 'ul' || tag === 'ol') {
+          const nested = renderMarkdownList(child, tag === 'ol', nestedCtx).trimEnd();
+          if (nested) {
+            trailingBlocks.push({ kind: 'nested', value: nested });
+          }
+          return;
+        }
+        if (isMarkdownListItemBlockTag(tag)) {
+          const block = finalizeMarkdownOutput(renderMarkdownNode(child, Object.assign({}, ctx, { listDepth: depth })));
+          if (block) {
+            trailingBlocks.push({ kind: 'block', value: block });
+          }
+          return;
+        }
+      }
+      inlineBuffer += renderMarkdownNode(child, Object.assign({}, ctx, { listDepth: depth }));
+    });
+
+    const inlineText = normalizeInlineMarkdownChunk(inlineBuffer);
+    let result = `${indent}${marker} ${inlineText}`.replace(/[ \t]+$/g, '');
+
+    trailingBlocks.forEach((entry) => {
+      if (!entry || !entry.value) {
+        return;
+      }
+      if (entry.kind === 'nested') {
+        result += `\n${entry.value}`;
+        return;
+      }
+      const padded = entry.value
+        .split('\n')
+        .map((line) => line ? `${continuationIndent}${line}` : continuationIndent)
+        .join('\n');
+      result += `\n${padded}`;
+    });
+
+    return result.trimEnd();
+  }
+
+  function parseListStartValue(listNode) {
+    const raw = ensureString(listNode && listNode.getAttribute && listNode.getAttribute('start')).trim();
+    const value = Number.parseInt(raw, 10);
+    return Number.isFinite(value) ? value : 1;
+  }
+
+  function renderMarkdownTable(tableNode, ctx) {
+    const rows = Array.from(tableNode.querySelectorAll('tr'));
+    const parsedRows = rows.map((row) => {
+      return Array.from(row.children || [])
+        .filter((cell) => {
+          const tag = ensureString(cell.tagName).toLowerCase();
+          return tag === 'th' || tag === 'td';
+        })
+        .map((cell) => {
+          const cellText = normalizeInlineMarkdownChunk(
+            renderMarkdownChildren(cell, Object.assign({}, ctx, { inTable: true }))
+          ).replace(/\n+/g, ' <br> ');
+          return escapeMarkdownTableCell(cellText);
+        });
+    }).filter((row) => row.length > 0);
+
+    if (!parsedRows.length) {
+      return '';
+    }
+
+    const columnCount = parsedRows.reduce((max, row) => Math.max(max, row.length), 0);
+    parsedRows.forEach((row) => {
+      while (row.length < columnCount) {
+        row.push('');
+      }
+    });
+
+    const hasHeaderRow = rows.length > 0 && Array.from(rows[0].children || []).some((cell) => {
+      return ensureString(cell.tagName).toLowerCase() === 'th';
+    });
+    const header = hasHeaderRow ? parsedRows[0] : parsedRows[0].map((_, index) => `Col ${index + 1}`);
+    const bodyRows = hasHeaderRow ? parsedRows.slice(1) : parsedRows;
+    const separator = new Array(columnCount).fill('---');
+
+    const lines = [];
+    lines.push(`| ${header.join(' | ')} |`);
+    lines.push(`| ${separator.join(' | ')} |`);
+    bodyRows.forEach((row) => {
+      lines.push(`| ${row.join(' | ')} |`);
+    });
+
+    return `\n\n${lines.join('\n')}\n\n`;
+  }
+
+  function escapeMarkdownTableCell(value) {
+    return ensureString(value)
+      .replace(/\|/g, '\\|')
+      .replace(/\r?\n/g, ' ')
+      .trim();
+  }
+
+  function extractMarkdownCodeLanguage(preNode, codeNode) {
+    const candidates = [
+      codeNode,
+      preNode,
+      preNode && preNode.parentElement,
+      preNode && preNode.closest && preNode.closest('[data-testid="code-block"], .md-code-block, code-block, .code-block')
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const className = ensureString(candidate.className);
+      const classMatch = className.match(/(?:^|\s)language-([a-z0-9_+.-]+)/i);
+      if (classMatch && classMatch[1]) {
+        return sanitizeMarkdownLanguage(classMatch[1]);
+      }
+      const attr = ensureString(
+        candidate.getAttribute && (
+          candidate.getAttribute('data-language') ||
+          candidate.getAttribute('lang')
+        )
+      ).trim();
+      if (attr) {
+        return sanitizeMarkdownLanguage(attr);
+      }
+    }
+
+    const labelNode =
+      (preNode && preNode.closest && preNode.closest('.md-code-block') &&
+        preNode.closest('.md-code-block').querySelector('.md-code-block-banner .d813de27')) ||
+      (preNode && preNode.closest && preNode.closest('.code-block') &&
+        preNode.closest('.code-block').querySelector('.code-block-decoration span')) ||
+      (preNode && preNode.closest && preNode.closest('[data-testid="code-block"]') &&
+        preNode.closest('[data-testid="code-block"]').querySelector('.text-xs')) ||
+      null;
+    if (labelNode) {
+      const label = sanitizeMarkdownLanguage(labelNode.textContent || '');
+      if (label) {
+        return label;
+      }
+    }
+    return '';
+  }
+
+  function sanitizeMarkdownLanguage(value) {
+    return ensureString(value).trim().replace(/[^a-z0-9_+.-]/gi, '');
+  }
+
+  function detectKatexMode(node) {
+    if (!node || !node.classList) {
+      return '';
+    }
+    if (node.classList.contains('katex-display')) {
+      return 'display';
+    }
+    if (node.classList.contains('katex') && !node.closest('.katex-display')) {
+      return 'inline';
+    }
+    return '';
+  }
+
+  function extractLatexFromNode(node) {
+    if (!node || !node.querySelector) {
+      return '';
+    }
+    const annotation =
+      (node.matches &&
+        node.matches('annotation[encoding="application/x-tex"]') &&
+        node) ||
+      node.querySelector('annotation[encoding="application/x-tex"]');
+    if (!annotation) {
+      return '';
+    }
+    return ensureString(annotation.textContent).replace(/\r\n/g, '\n').trim();
+  }
+
+  function escapeMarkdownText(text) {
+    return ensureString(text)
+      .replace(/\\/g, '\\\\')
+      .replace(/([`*_{}[\]()#+!>|])/g, '\\$1');
+  }
+
+  function normalizeInlineMarkdownChunk(value) {
+    return ensureString(value)
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function normalizePlainMarkdownText(value) {
+    return ensureString(value)
+      .replace(/\r\n/g, '\n')
+      .replace(/\u00a0/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function finalizeMarkdownOutput(value) {
+    return ensureString(value)
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function isMarkdownBlockTag(tag) {
+    return tag === 'div' ||
+      tag === 'section' ||
+      tag === 'article' ||
+      tag === 'main' ||
+      tag === 'header' ||
+      tag === 'footer' ||
+      tag === 'aside';
+  }
+
+  function isMarkdownListItemBlockTag(tag) {
+    return tag === 'p' ||
+      tag === 'div' ||
+      tag === 'pre' ||
+      tag === 'blockquote' ||
+      tag === 'table' ||
+      tag === 'h1' ||
+      tag === 'h2' ||
+      tag === 'h3' ||
+      tag === 'h4' ||
+      tag === 'h5' ||
+      tag === 'h6';
   }
 
   function buildExportText(messages) {
@@ -3526,7 +4855,7 @@ License: MIT
       return true; // ChatGPT
     }
     if (node.matches('#code-block-viewer')) {
-      return true; // ChatGPT fallback
+      return true; // ChatGPT
     }
     if (
       platform === 'deepseek' &&
@@ -3536,7 +4865,7 @@ License: MIT
         /(?:^|\s)language-[\w+.-]+(?:\s|$)/i.test(ensureString(node.className))
       )
     ) {
-      return true; // DeepSeek Prism direct pre/code
+      return true; // DeepSeek
     }
     if (
       node.matches('code-block, div.code-block') &&
@@ -4166,18 +5495,484 @@ License: MIT
     return false;
   }
 
+  async function requestRemoteText(url, label) {
+    if (typeof GM_xmlhttpRequest === 'function') {
+      return gmXmlHttpRequestPromise({
+        method: 'GET',
+        url: url,
+        responseType: 'text',
+        label: label
+      });
+    }
+    const response = await fetch(url, {
+      cache: 'force-cache',
+      credentials: 'omit'
+    });
+    if (!response || !response.ok) {
+      throw new Error(`${label || 'Remote text'} HTTP ${response && response.status}`);
+    }
+    return await response.text();
+  }
+
+  async function requestRemoteArrayBuffer(url, label, onProgress) {
+    if (typeof GM_xmlhttpRequest === 'function') {
+      return gmXmlHttpRequestPromise({
+        method: 'GET',
+        url: url,
+        responseType: 'arraybuffer',
+        label: label,
+        onProgress: onProgress
+      });
+    }
+    const response = await fetch(url, {
+      cache: 'force-cache',
+      credentials: 'omit'
+    });
+    if (!response || !response.ok) {
+      throw new Error(`${label || 'Remote binary'} HTTP ${response && response.status}`);
+    }
+    return await readRemoteFontBuffer(response, onProgress);
+  }
+
+  function gmXmlHttpRequestPromise(options) {
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({
+          method: options.method || 'GET',
+          url: options.url,
+          responseType: options.responseType,
+          anonymous: true,
+          onprogress: (event) => {
+            if (typeof options.onProgress === 'function') {
+              const loaded = Number(event && event.loaded) || 0;
+              const total = Number(event && event.total) || 0;
+              options.onProgress(loaded, total, !(event && event.lengthComputable && total > 0));
+            }
+          },
+          onload: (response) => {
+            const status = Number(response && response.status) || 0;
+            if (status < 200 || status >= 300) {
+              reject(new Error(`${options.label || 'Remote request'} HTTP ${status || 'error'}`));
+              return;
+            }
+            if (options.responseType === 'arraybuffer') {
+              resolve(response.response);
+              return;
+            }
+            resolve(response.responseText != null ? response.responseText : response.response);
+          },
+          onerror: (error) => {
+            reject(new Error(`${options.label || 'Remote request'} failed: ${String((error && error.error) || error || '')}`));
+          },
+          ontimeout: () => {
+            reject(new Error(`${options.label || 'Remote request'} timed out`));
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function encodeBase64Utf8(value) {
+    const input = ensureString(value);
+    if (!input) {
+      return '';
+    }
+    if (typeof TextEncoder === 'function') {
+      const bytes = new TextEncoder().encode(input);
+      const chunkSize = 0x8000;
+      let binary = '';
+      for (let index = 0; index < bytes.length; index += chunkSize) {
+        const chunk = bytes.subarray(index, index + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+      }
+      return btoa(binary);
+    }
+    return btoa(unescape(encodeURIComponent(input)));
+  }
+
+  async function importFrancLanguageDetectorFromSource(source) {
+    const raw = ensureString(source)
+      .replace(/\/\/# sourceMappingURL=.*$/gm, '')
+      .trim();
+    if (!raw) {
+      throw new Error('Language detector source is empty');
+    }
+    const dataUrl = `data:text/javascript;base64,${encodeBase64Utf8(raw)}`;
+    const blobUrl = URL.createObjectURL(new Blob([raw], { type: 'text/javascript' }));
+    try {
+      try {
+        return await import(blobUrl);
+      } catch (blobErr) {
+        return await import(dataUrl);
+      }
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    }
+  }
+
+  async function loadPdfLanguageDetector() {
+    if (!languageDetectorModulePromise) {
+      languageDetectorModulePromise = (async () => {
+        try {
+          const source = await requestRemoteText(PDF_LANGUAGE_DETECTOR_URL, 'Language detector');
+          const imported = await importFrancLanguageDetectorFromSource(source);
+          if (imported && typeof imported.francAll === 'function') {
+            return imported;
+          }
+          throw new Error('Language detector module is missing francAll');
+        } catch (err) {
+          console.warn('OmniChat: language detector unavailable for PDF export', err);
+          return null;
+        }
+      })();
+    }
+    return languageDetectorModulePromise;
+  }
+
+  function buildPdfLanguageProfile(messages, detectorModule, extraTexts) {
+    const detectedScripts = new Set();
+    const sampleCandidates = [];
+    let containsEmoji = false;
+
+    const scanText = (rawText) => {
+      const value = ensureString(rawText);
+      if (!value) {
+        return;
+      }
+      detectPdfScriptsInText(value, detectedScripts);
+      if (!containsEmoji && containsEmojiForPdf(value)) {
+        containsEmoji = true;
+      }
+      collectPdfLanguageSamples(value, sampleCandidates);
+    };
+
+    messages.forEach((message) => {
+      scanText(message && message.text);
+    });
+    (extraTexts || []).forEach((entry) => {
+      scanText(entry);
+    });
+
+    if (!detectedScripts.size) {
+      detectedScripts.add('latin');
+    }
+
+    const languageScores = Object.create(null);
+    const detector = detectorModule && typeof detectorModule.francAll === 'function'
+      ? detectorModule.francAll
+      : null;
+
+    if (detector) {
+      const selectedSamples = selectPdfLanguageSamples(sampleCandidates, PDF_LANGUAGE_SAMPLE_LIMIT);
+      selectedSamples.forEach((sample) => {
+        const results = detector(sample.text, { minLength: PDF_LANGUAGE_MIN_LENGTH });
+        if (!Array.isArray(results) || !results.length) {
+          return;
+        }
+        results.slice(0, 3).forEach((entry, index) => {
+          if (!Array.isArray(entry) || entry.length < 2) {
+            return;
+          }
+          const lang = ensureString(entry[0]).trim();
+          const score = Number(entry[1]);
+          if (!lang || lang === 'und' || !Number.isFinite(score) || score < 0.15) {
+            return;
+          }
+          const weight = sample.weight * score * (index === 0 ? 1 : 0.35);
+          languageScores[lang] = (languageScores[lang] || 0) + weight;
+        });
+      });
+    }
+
+    const detectedLanguages = Object.entries(languageScores)
+      .sort((a, b) => b[1] - a[1])
+      .map((entry) => mapFrancLanguageCode(entry[0]))
+      .filter((value, index, self) => value && self.indexOf(value) === index)
+      .slice(0, 8);
+
+    addFallbackLanguagesFromScripts(detectedLanguages, detectedScripts);
+
+    const mainLanguage = detectedLanguages[0] || fallbackLanguageFromScripts(detectedScripts) || 'und';
+    const profile = {
+      mainLanguage: mainLanguage,
+      detectedLanguages: detectedLanguages,
+      detectedScripts: Array.from(detectedScripts),
+      containsEmoji: containsEmoji
+    };
+
+    console.info('OmniChat PDF language detection:', {
+      mainLanguage: profile.mainLanguage,
+      detectedLanguages: profile.detectedLanguages,
+      detectedScripts: profile.detectedScripts
+    });
+
+    return profile;
+  }
+
+  function detectPdfScriptsInText(text, detectedScripts) {
+    const value = ensureString(text);
+    if (!value) {
+      return;
+    }
+    const segments = value.split(/\n+/);
+    segments.forEach((segment) => {
+      if (!segment) {
+        return;
+      }
+      const hasJapanese = PDF_SCRIPT_DETECTION_PATTERNS.japanese.test(segment);
+      const hasKorean = PDF_SCRIPT_DETECTION_PATTERNS.korean.test(segment);
+      const hasHan = PDF_HAN_PATTERN.test(segment);
+      const hasCjkSymbols = PDF_CJK_SYMBOL_PATTERN.test(segment);
+
+      if (PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) || PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)) {
+        detectedScripts.add('latin');
+      }
+      if (containsPdfSymbolTextForRouting(segment)) {
+        detectedScripts.add('symbolsText');
+      }
+      PDF_DIRECT_SCRIPT_SCAN_ORDER.forEach((script) => {
+        const pattern = PDF_SCRIPT_DETECTION_PATTERNS[script];
+        if (pattern && pattern.test(segment)) {
+          detectedScripts.add(script);
+        }
+      });
+      if (hasJapanese) {
+        detectedScripts.add('japanese');
+      }
+      if (hasKorean) {
+        detectedScripts.add('korean');
+      }
+      if (hasHan && !hasJapanese && !hasKorean) {
+        detectedScripts.add('chinese');
+      } else if (hasCjkSymbols && !hasJapanese && !hasKorean) {
+        detectedScripts.add('chinese');
+      }
+    });
+  }
+
+  function collectPdfLanguageSamples(text, target) {
+    const normalized = normalizePdfLanguageSample(text);
+    if (!normalized) {
+      return;
+    }
+    const maxSegmentsPerMessage = normalized.length > PDF_LANGUAGE_SAMPLE_LENGTH * 2 ? 2 : 1;
+    let added = 0;
+
+    for (let start = 0; start < normalized.length && added < maxSegmentsPerMessage; start += PDF_LANGUAGE_SAMPLE_LENGTH) {
+      const segment = normalized.slice(start, start + PDF_LANGUAGE_SAMPLE_LENGTH).trim();
+      if (segment.length < PDF_LANGUAGE_MIN_LENGTH) {
+        continue;
+      }
+      target.push({
+        text: segment,
+        weight: Math.min(segment.length, PDF_LANGUAGE_SAMPLE_LENGTH)
+      });
+      added += 1;
+    }
+  }
+
+  function normalizePdfLanguageSample(text) {
+    return ensureString(text)
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/https?:\/\/\S+/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function selectPdfLanguageSamples(candidates, limit) {
+    if (candidates.length <= limit) {
+      return candidates;
+    }
+    const selected = [];
+    const lastIndex = candidates.length - 1;
+    const step = lastIndex / Math.max(1, limit - 1);
+    const seen = new Set();
+
+    for (let index = 0; index < limit; index += 1) {
+      const candidateIndex = Math.min(lastIndex, Math.round(index * step));
+      if (seen.has(candidateIndex)) {
+        continue;
+      }
+      seen.add(candidateIndex);
+      selected.push(candidates[candidateIndex]);
+    }
+
+    return selected;
+  }
+
+  function mapFrancLanguageCode(code) {
+    const normalized = ensureString(code).trim().toLowerCase();
+    return PDF_LANGUAGE_CODE_MAP[normalized] || normalized || 'und';
+  }
+
+  function addFallbackLanguagesFromScripts(detectedLanguages, detectedScripts) {
+    Object.keys(PDF_SCRIPT_FALLBACK_LANGUAGE_MAP).forEach((script) => {
+      if (!detectedScripts.has(script)) {
+        return;
+      }
+      const code = PDF_SCRIPT_FALLBACK_LANGUAGE_MAP[script];
+      if (detectedLanguages.indexOf(code) === -1) {
+        detectedLanguages.push(code);
+      }
+    });
+  }
+
+  function fallbackLanguageFromScripts(detectedScripts) {
+    for (const script of PDF_SCRIPT_FALLBACK_PRIORITY) {
+      if (!detectedScripts.has(script)) {
+        continue;
+      }
+      if (script === 'latin') {
+        return 'en';
+      }
+      if (PDF_SCRIPT_FALLBACK_LANGUAGE_MAP[script]) {
+        return PDF_SCRIPT_FALLBACK_LANGUAGE_MAP[script];
+      }
+    }
+    if (detectedScripts.has('latin')) {
+      return 'en';
+    }
+    return 'und';
+  }
+
+  function formatPdfDetectionSummary(languageProfile) {
+    if (!languageProfile || typeof languageProfile !== 'object') {
+      return 'Using local language and script detection.';
+    }
+    const languages = Array.isArray(languageProfile.detectedLanguages)
+      ? languageProfile.detectedLanguages.filter(Boolean)
+      : [];
+    const scripts = Array.isArray(languageProfile.detectedScripts)
+      ? languageProfile.detectedScripts.filter(Boolean)
+      : [];
+    const languageText = languages.length ? languages.join(', ') : ensureString(languageProfile.mainLanguage || 'und');
+    const scriptText = scripts.length ? scripts.join(', ') : 'latin';
+    return `Main language: ${ensureString(languageProfile.mainLanguage || 'und')} | Languages: ${languageText} | Scripts: ${scriptText}`;
+  }
+
+  function formatPdfResourceLabel(resourceKey) {
+    if (PDF_SCRIPT_RESOURCE_LABELS[resourceKey]) {
+      return PDF_SCRIPT_RESOURCE_LABELS[resourceKey];
+    }
+    return `${ensureString(resourceKey || 'PDF')} font`;
+  }
+
+  function clonePdfFontContext(context) {
+    if (!context || typeof context !== 'object') {
+      return null;
+    }
+    const next = {
+      baseFont: ensureString(context.baseFont),
+      mainLanguage: ensureString(context.mainLanguage || 'und'),
+      detectedLanguages: Array.isArray(context.detectedLanguages) ? context.detectedLanguages.slice() : [],
+      detectedScripts: Array.isArray(context.detectedScripts) ? context.detectedScripts.slice() : [],
+      safeSegmentationScripts: Array.isArray(context.safeSegmentationScripts) ? context.safeSegmentationScripts.slice() : [],
+      scriptFonts: Object.create(null),
+      emojiFontFamily: ensureString(context.emojiFontFamily)
+    };
+    Object.keys(context.scriptFonts || {}).forEach((script) => {
+      if (context.scriptFonts[script]) {
+        next.scriptFonts[script] = context.scriptFonts[script];
+      }
+    });
+    return next;
+  }
+
+  function isRecoverablePdfFontError(error) {
+    const details = [
+      ensureString(error && error.message),
+      ensureString(error && error.stack)
+    ].filter(Boolean).join('\n');
+    if (!details) {
+      return false;
+    }
+    return /advanceWidth|xCoordinate|EmbeddedFont|GPOSProcessor|getAnchor|TTFFont\.layout|FontProvider\.provideFont/i.test(details);
+  }
+
+  function buildPdfFontFallbackPlans(fontContext) {
+    if (!fontContext) {
+      return [];
+    }
+    const hasEmojiFont = Boolean(fontContext.emojiFontFamily);
+    const availableScripts = Object.keys(fontContext.scriptFonts).filter((script) => Boolean(fontContext.scriptFonts[script]));
+    if (!availableScripts.length && !hasEmojiFont) {
+      return [];
+    }
+    const existingSafeScripts = Array.isArray(fontContext.safeSegmentationScripts)
+      ? fontContext.safeSegmentationScripts
+      : [];
+    const recommendedSafeScripts = availableScripts.filter((script) => {
+      return PDF_SAFE_SEGMENTATION_SCRIPTS.indexOf(script) !== -1 && existingSafeScripts.indexOf(script) === -1;
+    });
+    const plans = [];
+    if (hasEmojiFont) {
+      plans.push({
+        disabledScripts: [],
+        disableEmojiFont: true,
+        detail: 'Retrying PDF generation without the emoji font.'
+      });
+    }
+    if (recommendedSafeScripts.length) {
+      plans.push({
+        disabledScripts: [],
+        safeSegmentationScripts: existingSafeScripts.concat(recommendedSafeScripts),
+        detail: 'Retrying PDF generation with safer complex-script layout.'
+      });
+    }
+    const orderedScripts = PDF_SCRIPT_FONT_RETRY_ORDER
+      .filter((script) => availableScripts.indexOf(script) !== -1)
+      .concat(availableScripts.filter((script) => PDF_SCRIPT_FONT_RETRY_ORDER.indexOf(script) === -1));
+    plans.push(...orderedScripts.map((script) => ({
+      disabledScripts: [script],
+      detail: `Retrying PDF generation without ${formatPdfResourceLabel(script).toLowerCase()}.`
+    })));
+    if (availableScripts.length > 1) {
+      plans.push({
+        disabledScripts: availableScripts.slice(),
+        disableEmojiFont: hasEmojiFont,
+        detail: 'Retrying PDF generation without extra language fonts.'
+      });
+    }
+    return plans;
+  }
+
+  function buildPdfFontContextVariant(fontContext, disabledScripts, safeSegmentationScripts, disableEmojiFont) {
+    const baseContext = clonePdfFontContext(fontContext);
+    if (!baseContext) {
+      return null;
+    }
+    const disabled = new Set(Array.isArray(disabledScripts) ? disabledScripts : []);
+    const scriptFonts = Object.create(null);
+    Object.keys(baseContext.scriptFonts || {}).forEach((script) => {
+      if (!disabled.has(script) && baseContext.scriptFonts[script]) {
+        scriptFonts[script] = baseContext.scriptFonts[script];
+      }
+    });
+    baseContext.scriptFonts = scriptFonts;
+    baseContext.detectedScripts = baseContext.detectedScripts.filter((script) => !disabled.has(script));
+    baseContext.safeSegmentationScripts = (
+      Array.isArray(safeSegmentationScripts) ? safeSegmentationScripts : baseContext.safeSegmentationScripts
+    ).filter((script, index, list) => {
+      return !disabled.has(script) && list.indexOf(script) === index;
+    });
+    if (disableEmojiFont) {
+      baseContext.emojiFontFamily = '';
+    }
+    return baseContext;
+  }
+
   async function exportPdf(messages) {
-    if (!pdfMakeRef) {
-      pdfMakeRef = resolvePdfMake();
-    }
-    const pdfMakeInstance = pdfMakeRef || resolvePdfMake();
-    if (!pdfMakeInstance || typeof pdfMakeInstance.createPdf !== 'function') {
-      return false;
-    }
-    const fontName = await ensurePdfMakeFonts(pdfMakeInstance);
-    if (!fontName) {
-      return false;
-    }
+    updatePdfExportLoader({
+      stage: 'Detecting languages and scripts...',
+      detail: 'Analyzing the full chat locally before preparing the PDF.',
+      progress: 0.18,
+      progressText: 'Step 2 of 4',
+      indeterminate: false
+    });
+    await waitForNextPaint();
     const title = `${getPlatformLabel()} Export`;
     const conversationTitle = getExportConversationTitle();
     const filename = buildExportFilename('pdf', null);
@@ -4189,6 +5984,35 @@ License: MIT
     }
     metaLines.push(`URL: ${metaUrl}`);
     metaLines.push(`Exported: ${metaDate}`);
+    if (!pdfMakeRef) {
+      pdfMakeRef = resolvePdfMake();
+    }
+    const pdfMakeInstance = pdfMakeRef || resolvePdfMake();
+    if (!pdfMakeInstance || typeof pdfMakeInstance.createPdf !== 'function') {
+      return false;
+    }
+    const detectorModule = await loadPdfLanguageDetector();
+    const languageProfile = buildPdfLanguageProfile(messages, detectorModule, [title, conversationTitle, metaLines.join('\n')]);
+    updatePdfExportLoader({
+      stage: 'Detecting languages and scripts...',
+      detail: formatPdfDetectionSummary(languageProfile),
+      progress: 0.28,
+      progressText: 'Step 2 of 4',
+      indeterminate: false
+    });
+    await waitForNextPaint();
+    updatePdfExportLoader({
+      stage: 'Loading PDF fonts...',
+      detail: formatPdfDetectionSummary(languageProfile),
+      progress: 0.34,
+      progressText: 'Step 3 of 4',
+      indeterminate: false
+    });
+    await waitForNextPaint();
+    const fontName = await ensurePdfMakeFonts(pdfMakeInstance, languageProfile);
+    if (!fontName) {
+      return false;
+    }
     const pageMargins = [42, 38, 42, 50];
     const pageWidthPt = 595.28;
     const dividerWidth = pageWidthPt - pageMargins[0] - pageMargins[2];
@@ -4226,7 +6050,17 @@ License: MIT
         const roleLabel = wrapRoleLabel(message.role);
         const messageText = ensureString(message.text);
         const htmlContent = message.html || messageText;
-        const richContent = convertHtmlToPdfMake(htmlContent);
+        const liveGeminiNode =
+          platform === 'gemini' &&
+          message &&
+          message.sourceNode &&
+          message.sourceNode.nodeType === Node.ELEMENT_NODE &&
+          message.sourceNode.isConnected
+            ? message.sourceNode
+            : null;
+        const richContent = liveGeminiNode
+          ? parseNodeToPdfMake(liveGeminiNode)
+          : convertHtmlToPdfMake(htmlContent);
         const normalizedRichContent = normalizePdfContentForPlatform(richContent);
         const emojiRichContent = applyEmojiFontToTree(normalizedRichContent);
         const richContentStack = Array.isArray(emojiRichContent) ? emojiRichContent : [emojiRichContent];
@@ -4301,25 +6135,75 @@ License: MIT
       };
     };
 
-    try {
+    const originalFontContext = clonePdfFontContext(activePdfFontContext);
+    const attemptPdfDownload = async function (fontContextOverride) {
+      activePdfFontContext = clonePdfFontContext(fontContextOverride);
+      activePdfEmojiFontFamily = activePdfFontContext && activePdfFontContext.emojiFontFamily
+        ? activePdfFontContext.emojiFontFamily
+        : '';
       await downloadPdfDocument(pdfMakeInstance, buildDocDefinition(), filename);
+    };
+
+    try {
+      updatePdfExportLoader({
+        stage: 'Generating PDF...',
+        detail: 'Finalizing layout and preparing the download.',
+        progress: 0.92,
+        progressText: 'Step 4 of 4',
+        indeterminate: false
+      });
+      await waitForNextPaint();
+      await attemptPdfDownload(originalFontContext);
+      updatePdfExportLoader({
+        stage: 'PDF export ready.',
+        detail: 'The document has been generated and the download has been triggered.',
+        progress: 1,
+        progressText: 'Completed',
+        indeterminate: false
+      });
+      await waitForNextPaint();
       return true;
     } catch (err) {
-      if (activePdfEmojiFontFamily) {
-        console.warn('PDF export with emoji font failed, retrying without emoji font', err);
-        activePdfEmojiFontFamily = '';
-        try {
-          await downloadPdfDocument(pdfMakeInstance, buildDocDefinition(), filename);
-          return true;
-        } catch (retryErr) {
-          console.error('PDF export error:', retryErr);
-          return false;
+      const fallbackPlans = isRecoverablePdfFontError(err) ? buildPdfFontFallbackPlans(originalFontContext) : [];
+      if (fallbackPlans.length) {
+        console.warn('PDF export hit a recoverable font error, retrying with safer font fallbacks', err);
+        for (let index = 0; index < fallbackPlans.length; index += 1) {
+          const plan = fallbackPlans[index];
+          updatePdfExportLoader({
+            stage: 'Generating PDF...',
+            detail: plan.detail,
+            progress: Math.min(0.97, 0.93 + ((index + 1) / (fallbackPlans.length + 1)) * 0.04),
+            progressText: 'Retrying with fallback fonts',
+            indeterminate: false
+          });
+          await waitForNextPaint();
+          try {
+            const retryContext = buildPdfFontContextVariant(
+              originalFontContext,
+              plan.disabledScripts,
+              plan.safeSegmentationScripts,
+              plan.disableEmojiFont
+            );
+            await attemptPdfDownload(retryContext);
+            updatePdfExportLoader({
+              stage: 'PDF export ready.',
+              detail: 'The PDF was generated after applying a safer font fallback.',
+              progress: 1,
+              progressText: 'Completed',
+              indeterminate: false
+            });
+            await waitForNextPaint();
+            return true;
+          } catch (retryErr) {
+            console.warn('PDF export fallback retry failed', plan.disabledScripts, retryErr);
+          }
         }
       }
       console.error('PDF export error:', err);
       return false;
     } finally {
       activePdfEmojiFontFamily = '';
+      activePdfFontContext = null;
     }
   }
 
@@ -4499,7 +6383,7 @@ License: MIT
     return null;
   }
 
-  async function ensurePdfMakeFonts(pdfMakeInstance) {
+  async function ensurePdfMakeFonts(pdfMakeInstance, languageProfile) {
     const localPdfMake = getLocalPdfMake();
     const vfsCandidates = [
       pdfMakeInstance.vfs,
@@ -4517,49 +6401,151 @@ License: MIT
       }
     }
     if (vfs && Object.keys(vfs).length) {
-      if (typeof pdfMakeInstance.addVirtualFileSystem === 'function') {
-        pdfMakeInstance.addVirtualFileSystem(vfs);
-      } else {
-        pdfMakeInstance.vfs = vfs;
-      }
-      if (window.pdfMake && window.pdfMake !== pdfMakeInstance) {
-        window.pdfMake.vfs = vfs;
-      }
+      mergePdfVfs(pdfMakeInstance, vfs);
     }
 
     const baseFont = ensureBaseFont(pdfMakeInstance);
     if (!baseFont) {
       return null;
     }
+
+    activePdfFontContext = {
+      baseFont: baseFont,
+      mainLanguage: languageProfile && languageProfile.mainLanguage ? languageProfile.mainLanguage : 'und',
+      detectedLanguages: languageProfile && Array.isArray(languageProfile.detectedLanguages)
+        ? languageProfile.detectedLanguages.slice()
+        : [],
+      detectedScripts: languageProfile && Array.isArray(languageProfile.detectedScripts)
+        ? languageProfile.detectedScripts.slice()
+        : ['latin'],
+      safeSegmentationScripts: [],
+      scriptFonts: Object.create(null),
+      emojiFontFamily: ''
+    };
+
     activePdfEmojiFontFamily = '';
-    const emojiFont = await ensureEmojiFont(pdfMakeInstance);
+    const scriptLoadList = activePdfFontContext.detectedScripts.filter((script) => {
+      return Boolean(PDF_SCRIPT_FONT_SPECS[script]);
+    });
+    const existingVfs = pdfMakeInstance.vfs || {};
+    const pendingResources = [];
+
+    scriptLoadList.forEach((script) => {
+      const spec = PDF_SCRIPT_FONT_SPECS[script];
+      if (spec && !existingVfs[spec.file]) {
+        pendingResources.push({ key: script, kind: 'script' });
+      }
+    });
+    if (platform === 'gemini') {
+      activePdfFontContext.safeSegmentationScripts = scriptLoadList.filter((script, index, list) => {
+        return PDF_SAFE_SEGMENTATION_SCRIPTS.indexOf(script) !== -1 && list.indexOf(script) === index;
+      });
+    }
+    if (PDF_ENABLE_EMOJI_FONT && languageProfile && languageProfile.containsEmoji && !existingVfs[PDF_EMOJI_FONT_FILE]) {
+      pendingResources.push({ key: 'emoji', kind: 'emoji' });
+    }
+
+    if (!pendingResources.length) {
+      updatePdfExportLoader({
+        stage: 'Loading PDF fonts...',
+        detail: 'All required fonts are already cached locally.',
+        progress: 0.84,
+        progressText: 'Step 3 of 4',
+        indeterminate: false
+      });
+      await waitForNextPaint();
+    }
+
+    for (let index = 0; index < scriptLoadList.length; index += 1) {
+      const script = scriptLoadList[index];
+      const family = await ensureScriptFont(pdfMakeInstance, script, {
+        resourceIndex: pendingResources.findIndex((entry) => entry.key === script),
+        totalResources: pendingResources.length,
+        pendingResources: pendingResources
+      });
+      if (script && family) {
+        activePdfFontContext.scriptFonts[script] = family;
+      }
+    }
+
+    const emojiFont = PDF_ENABLE_EMOJI_FONT && languageProfile && languageProfile.containsEmoji
+      ? await ensureEmojiFont(pdfMakeInstance, {
+        resourceIndex: pendingResources.findIndex((entry) => entry.key === 'emoji'),
+        totalResources: pendingResources.length,
+        pendingResources: pendingResources
+      })
+      : '';
     if (emojiFont) {
       activePdfEmojiFontFamily = emojiFont;
+      activePdfFontContext.emojiFontFamily = emojiFont;
     }
+    updatePdfExportLoader({
+      stage: 'Loading PDF fonts...',
+      detail: pendingResources.length
+        ? 'Required language fonts are ready for the PDF renderer.'
+        : 'No extra font download was needed.',
+      progress: 0.84,
+      progressText: 'Step 3 of 4',
+      indeterminate: false
+    });
+    await waitForNextPaint();
     return baseFont;
   }
 
-  async function ensureEmojiFont(pdfMakeInstance) {
+  function mergePdfVfs(pdfMakeInstance, vfs) {
+    if (!vfs || typeof vfs !== 'object') {
+      return;
+    }
+    if (typeof pdfMakeInstance.addVirtualFileSystem === 'function') {
+      pdfMakeInstance.addVirtualFileSystem(vfs);
+    } else {
+      pdfMakeInstance.vfs = Object.assign({}, pdfMakeInstance.vfs || {}, vfs);
+    }
+    if (window.pdfMake && window.pdfMake !== pdfMakeInstance) {
+      window.pdfMake.vfs = Object.assign({}, window.pdfMake.vfs || {}, vfs);
+    }
+  }
+
+  async function ensureScriptFont(pdfMakeInstance, script, progressState) {
+    const spec = PDF_SCRIPT_FONT_SPECS[script];
+    if (!spec) {
+      return '';
+    }
+    try {
+      const vfs = pdfMakeInstance.vfs || {};
+      if (vfs[spec.file]) {
+        registerPdfFont(pdfMakeInstance, spec.family, spec.file);
+        return spec.family;
+      }
+      const base64 = await loadRemoteFontBase64(spec.file, spec.urls, script, progressState);
+      if (!base64) {
+        return '';
+      }
+      const nextVfs = {};
+      nextVfs[spec.file] = base64;
+      mergePdfVfs(pdfMakeInstance, nextVfs);
+      registerPdfFont(pdfMakeInstance, spec.family, spec.file);
+      return spec.family;
+    } catch (err) {
+      console.warn(`OmniChat: ${script} PDF font unavailable`, err);
+      return '';
+    }
+  }
+
+  async function ensureEmojiFont(pdfMakeInstance, progressState) {
     try {
       const vfs = pdfMakeInstance.vfs || {};
       if (vfs[PDF_EMOJI_FONT_FILE]) {
         registerPdfFont(pdfMakeInstance, PDF_EMOJI_FONT_FAMILY, PDF_EMOJI_FONT_FILE);
         return PDF_EMOJI_FONT_FAMILY;
       }
-      const base64 = await loadEmojiFontBase64();
+      const base64 = await loadRemoteFontBase64(PDF_EMOJI_FONT_FILE, PDF_EMOJI_FONT_URLS, 'emoji', progressState);
       if (!base64) {
         return '';
       }
       const nextVfs = {};
       nextVfs[PDF_EMOJI_FONT_FILE] = base64;
-      if (typeof pdfMakeInstance.addVirtualFileSystem === 'function') {
-        pdfMakeInstance.addVirtualFileSystem(nextVfs);
-      } else {
-        pdfMakeInstance.vfs = Object.assign({}, pdfMakeInstance.vfs || {}, nextVfs);
-      }
-      if (window.pdfMake && window.pdfMake !== pdfMakeInstance) {
-        window.pdfMake.vfs = Object.assign({}, window.pdfMake.vfs || {}, nextVfs);
-      }
+      mergePdfVfs(pdfMakeInstance, nextVfs);
       registerPdfFont(pdfMakeInstance, PDF_EMOJI_FONT_FAMILY, PDF_EMOJI_FONT_FILE);
       return PDF_EMOJI_FONT_FAMILY;
     } catch (err) {
@@ -4580,39 +6566,144 @@ License: MIT
     });
   }
 
-  async function loadEmojiFontBase64() {
-    if (!emojiFontBase64Promise) {
-      emojiFontBase64Promise = (async function () {
-        for (const url of PDF_EMOJI_FONT_URLS) {
+  async function loadRemoteFontBase64(cacheKey, urls, label, progressState) {
+    if (!pdfFontBase64Promises[cacheKey]) {
+      pdfFontBase64Promises[cacheKey] = (async function () {
+        for (const url of urls) {
           try {
-            const response = await fetch(url, {
-              cache: 'force-cache',
-              credentials: 'omit'
+            updatePdfFontDownloadProgress(progressState, label, 0, 0, true);
+            const buffer = await requestRemoteArrayBuffer(url, `${label || 'PDF'} font`, (loaded, total, indeterminate) => {
+              updatePdfFontDownloadProgress(progressState, label, loaded, total, indeterminate);
             });
-            if (!response || !response.ok) {
-              continue;
-            }
-            const buffer = await response.arrayBuffer();
             if (!buffer || !buffer.byteLength) {
               continue;
             }
-            return arrayBufferToBase64(buffer);
+            updatePdfFontDownloadProgress(progressState, label, buffer.byteLength, buffer.byteLength, false);
+            return await arrayBufferToBase64(buffer);
           } catch (err) {
             const details = String((err && err.message) || err || '');
             const isCspBlocked = /content security policy|csp|failed to fetch/i.test(details);
             if (isCspBlocked) {
               return '';
             }
-            console.warn('OmniChat: failed loading emoji font URL', url, err);
+            console.warn(`OmniChat: failed loading ${label || 'pdf'} font URL`, url, err);
           }
         }
         return '';
       })();
     }
-    return emojiFontBase64Promise;
+    return pdfFontBase64Promises[cacheKey];
   }
 
-  function arrayBufferToBase64(buffer) {
+  function updatePdfFontDownloadProgress(progressState, label, loaded, total, indeterminate) {
+    const totalResources = Math.max(0, Number(progressState && progressState.totalResources) || 0);
+    const resourceIndex = Math.max(0, Number(progressState && progressState.resourceIndex) || 0);
+    const resourceLabel = formatPdfResourceLabel(label);
+    let withinResource = 0;
+    let meta = '';
+
+    if (Number.isFinite(total) && total > 0 && Number.isFinite(loaded)) {
+      withinResource = Math.max(0, Math.min(1, loaded / total));
+      meta = `${resourceLabel} ${Math.round(withinResource * 100)}%`;
+    } else if (Number.isFinite(loaded) && loaded > 0) {
+      meta = `${resourceLabel} ${formatPdfByteSize(loaded)} downloaded`;
+    } else {
+      meta = `${resourceLabel}...`;
+    }
+
+    const overallBase = 0.34;
+    const overallSpan = 0.5;
+    const progress = totalResources > 0
+      ? overallBase + (((resourceIndex + withinResource) / totalResources) * overallSpan)
+      : overallBase;
+    const pendingResources = progressState && Array.isArray(progressState.pendingResources)
+      ? progressState.pendingResources
+      : [];
+    const remainingLabels = pendingResources
+      .slice(Math.min(resourceIndex, pendingResources.length))
+      .map((entry) => formatPdfResourceLabel(entry.key));
+    const resourceCountText = totalResources > 0
+      ? `${Math.min(resourceIndex + 1, totalResources)} / ${totalResources} resources`
+      : 'Step 3 of 4';
+    const detail = remainingLabels.length
+      ? `Loading ${resourceLabel}. Remaining resources: ${remainingLabels.join(', ')}.`
+      : `Loading ${resourceLabel}.`;
+
+    updatePdfExportLoader({
+      stage: 'Loading PDF fonts...',
+      detail: detail,
+      progress: progress,
+      progressText: meta ? `${resourceCountText} | ${meta}` : resourceCountText,
+      indeterminate: Boolean(indeterminate && !(Number.isFinite(total) && total > 0))
+    });
+  }
+
+  async function readRemoteFontBuffer(response, onProgress) {
+    if (!response || !response.body || typeof response.body.getReader !== 'function') {
+      const directBuffer = await response.arrayBuffer();
+      if (typeof onProgress === 'function') {
+        onProgress(directBuffer.byteLength, directBuffer.byteLength, false);
+      }
+      return directBuffer;
+    }
+
+    const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+    const total = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0;
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    let nextYieldAt = 256 * 1024;
+
+    while (true) {
+      const result = await reader.read();
+      if (!result || result.done) {
+        break;
+      }
+      const value = result.value;
+      if (!value || !value.byteLength) {
+        continue;
+      }
+      chunks.push(value);
+      loaded += value.byteLength;
+      if (typeof onProgress === 'function') {
+        onProgress(loaded, total, !total);
+      }
+      if (loaded >= nextYieldAt) {
+        nextYieldAt += 256 * 1024;
+        await waitForNextPaint();
+      }
+    }
+
+    const merged = mergeUint8ArrayChunks(chunks, loaded);
+    if (typeof onProgress === 'function') {
+      onProgress(loaded, total || loaded, false);
+    }
+    return merged.buffer;
+  }
+
+  function mergeUint8ArrayChunks(chunks, totalLength) {
+    const output = new Uint8Array(totalLength);
+    let offset = 0;
+    chunks.forEach((chunk) => {
+      output.set(chunk, offset);
+      offset += chunk.byteLength;
+    });
+    return output;
+  }
+
+  async function arrayBufferToBase64(buffer) {
+    if (typeof FileReader === 'function') {
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = ensureString(reader.result);
+          const commaIndex = result.indexOf(',');
+          resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+        reader.readAsDataURL(new Blob([buffer]));
+      });
+    }
     const bytes = new Uint8Array(buffer);
     const chunkSize = 0x8000;
     let binary = '';
@@ -4623,8 +6714,22 @@ License: MIT
     return btoa(binary);
   }
 
+  function formatPdfByteSize(bytes) {
+    const value = Number(bytes);
+    if (!Number.isFinite(value) || value <= 0) {
+      return '0 B';
+    }
+    if (value < 1024) {
+      return `${Math.round(value)} B`;
+    }
+    if (value < 1024 * 1024) {
+      return `${(value / 1024).toFixed(1)} KB`;
+    }
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   function applyEmojiFontToTree(node) {
-    if (!activePdfEmojiFontFamily) {
+    if (!activePdfEmojiFontFamily && !activePdfFontContext) {
       return node;
     }
     if (typeof node === 'string') {
@@ -4636,12 +6741,9 @@ License: MIT
     if (!node || typeof node !== 'object') {
       return node;
     }
-    if (node.font === 'Courier' || node.font === 'monospace') {
-      return node;
-    }
     const next = Object.assign({}, node);
     if (Object.prototype.hasOwnProperty.call(next, 'text')) {
-      next.text = applyEmojiFontToTree(next.text);
+      next.text = applyPdfFontsToTextValue(next.text);
     }
     if (Array.isArray(next.stack)) {
       next.stack = next.stack.map(applyEmojiFontToTree);
@@ -4665,44 +6767,293 @@ License: MIT
     return next;
   }
 
+  function applyPdfFontsToTextValue(value) {
+    if (typeof value === 'string') {
+      return formatPdfTextWithEmoji(value);
+    }
+    if (Array.isArray(value)) {
+      const output = [];
+      value.forEach((entry) => {
+        appendPdfTextValue(output, entry);
+      });
+      return output.length === 1 && typeof output[0] === 'string' ? output[0] : output;
+    }
+    if (value && typeof value === 'object') {
+      return applyEmojiFontToTree(value);
+    }
+    return value;
+  }
+
+  function appendPdfTextValue(target, value) {
+    if (value === null || value === undefined) {
+      return;
+    }
+    if (typeof value === 'string') {
+      const formatted = formatPdfTextWithEmoji(value);
+      if (Array.isArray(formatted)) {
+        target.push(...formatted);
+      } else {
+        target.push(formatted);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry) => appendPdfTextValue(target, entry));
+      return;
+    }
+    if (typeof value === 'object') {
+      target.push(applyEmojiFontToTree(value));
+      return;
+    }
+    target.push(value);
+  }
+
   function formatPdfTextWithEmoji(text) {
     const raw = ensureString(text);
     if (!raw) {
       return '';
     }
-    if (!activePdfEmojiFontFamily) {
+    const fontContext = activePdfFontContext;
+    const hasScriptFonts = Boolean(
+      fontContext &&
+      fontContext.scriptFonts &&
+      Object.keys(fontContext.scriptFonts).length
+    );
+    if (!activePdfEmojiFontFamily && !hasScriptFonts) {
       return raw;
     }
-    if (!containsEmojiForPdf(raw)) {
-      return raw;
-    }
-    const graphemes = splitGraphemes(raw);
+    const textUnits = splitPdfTextForFontRouting(raw, fontContext);
     const chunks = [];
     let currentText = '';
-    let currentEmoji = null;
+    let currentFont = null;
+    let currentForceSeparate = false;
 
-    graphemes.forEach((segment) => {
-      const isEmoji = containsEmojiForPdf(segment);
-      if (currentEmoji === null || currentEmoji === isEmoji) {
-        currentText += segment;
-        currentEmoji = isEmoji;
+    textUnits.forEach((unit) => {
+      const segment = unit && typeof unit === 'object' ? ensureString(unit.text) : ensureString(unit);
+      const nextFont = resolvePdfFontFamilyForTextUnit(unit, fontContext);
+      const forceSeparate = Boolean(unit && typeof unit === 'object' && unit.forceSeparate);
+      if (currentFont === null) {
+        currentText = segment;
+        currentFont = nextFont;
+        currentForceSeparate = forceSeparate;
         return;
       }
-      chunks.push({ text: currentText, isEmoji: currentEmoji });
+      if (currentFont === nextFont && !currentForceSeparate && !forceSeparate) {
+        currentText += segment;
+        currentFont = nextFont;
+        return;
+      }
+      chunks.push({ text: currentText, font: currentFont || '' });
       currentText = segment;
-      currentEmoji = isEmoji;
+      currentFont = nextFont;
+      currentForceSeparate = forceSeparate;
     });
 
     if (currentText) {
-      chunks.push({ text: currentText, isEmoji: currentEmoji });
+      chunks.push({ text: currentText, font: currentFont || '' });
+    }
+
+    if (chunks.length === 1 && !chunks[0].font) {
+      return chunks[0].text;
     }
 
     return chunks.map((chunk) => {
-      if (chunk.isEmoji) {
-        return { text: chunk.text, font: activePdfEmojiFontFamily };
+      if (chunk.font) {
+        return { text: chunk.text, font: chunk.font };
       }
       return { text: chunk.text };
     });
+  }
+
+  function splitPdfTextForFontRouting(text, fontContext) {
+    const graphemes = splitGraphemes(text);
+    const output = [];
+
+    graphemes.forEach((segment, index) => {
+      const scriptHint = detectPdfScriptForSegment(segment, graphemes, index, fontContext);
+      const forceSeparate = shouldUseSafePdfScriptSegmentation(scriptHint, fontContext);
+      if (!forceSeparate) {
+        output.push({ text: segment, scriptHint: scriptHint, forceSeparate: false });
+        return;
+      }
+      Array.from(segment).forEach((codePoint) => {
+        if (codePoint) {
+          output.push({ text: codePoint, scriptHint: scriptHint, forceSeparate: true });
+        }
+      });
+    });
+
+    return output;
+  }
+
+  function shouldUseSafePdfScriptSegmentation(script, fontContext) {
+    if (!script || !fontContext || !Array.isArray(fontContext.safeSegmentationScripts)) {
+      return false;
+    }
+    return fontContext.safeSegmentationScripts.indexOf(script) !== -1;
+  }
+
+  function resolvePdfFontFamilyForTextUnit(unit, fontContext) {
+    const segment = unit && typeof unit === 'object' ? ensureString(unit.text) : ensureString(unit);
+    if (!fontContext || !fontContext.scriptFonts) {
+      if (activePdfEmojiFontFamily && containsEmojiStyleForPdf(segment)) {
+        return activePdfEmojiFontFamily;
+      }
+      return '';
+    }
+    const script = unit && typeof unit === 'object' ? ensureString(unit.scriptHint) : '';
+    if (script === 'symbols' && activePdfEmojiFontFamily) {
+      return activePdfEmojiFontFamily;
+    }
+    if (script === 'symbols' && fontContext.scriptFonts.symbolsText) {
+      return fontContext.scriptFonts.symbolsText;
+    }
+    if (script === 'symbolsText' && fontContext.scriptFonts.symbolsText) {
+      return fontContext.scriptFonts.symbolsText;
+    }
+    if (script === 'symbolsText' && activePdfEmojiFontFamily) {
+      return activePdfEmojiFontFamily;
+    }
+    if (script && fontContext.scriptFonts[script]) {
+      return fontContext.scriptFonts[script];
+    }
+    if (activePdfEmojiFontFamily && containsEmojiStyleForPdf(segment)) {
+      return activePdfEmojiFontFamily;
+    }
+    return '';
+  }
+
+  function detectPdfScriptForSegment(segment, graphemes, index, fontContext) {
+    if (PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)) {
+      return 'latinExtended';
+    }
+    if (PDF_LATIN_COMBINING_MARK_PATTERN.test(segment) && hasLatinExtendedContext(graphemes, index)) {
+      return 'latinExtended';
+    }
+    if (PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) && hasLatinExtendedContext(graphemes, index)) {
+      return 'latinExtended';
+    }
+    if (PDF_SCRIPT_DETECTION_PATTERNS.japanese.test(segment)) {
+      return 'japanese';
+    }
+    if (PDF_SCRIPT_DETECTION_PATTERNS.korean.test(segment)) {
+      return 'korean';
+    }
+    if (PDF_CJK_SYMBOL_PATTERN.test(segment) || PDF_HAN_PATTERN.test(segment)) {
+      return resolveCjkPdfScript(graphemes, index, fontContext);
+    }
+    if (containsEmojiStyleForPdf(segment)) {
+      return 'symbols';
+    }
+    if (containsPdfSymbolTextForRouting(segment)) {
+      return 'symbolsText';
+    }
+    if (containsEmojiForPdf(segment)) {
+      return 'symbols';
+    }
+    if (PDF_SCRIPT_DETECTION_PATTERNS.sinhala.test(segment)) {
+      return 'sinhala';
+    }
+    for (const script of PDF_DIRECT_SCRIPT_SCAN_ORDER) {
+      const pattern = PDF_SCRIPT_DETECTION_PATTERNS[script];
+      if (pattern && pattern.test(segment)) {
+        return script;
+      }
+    }
+    return '';
+  }
+
+  function hasLatinExtendedContext(graphemes, index) {
+    return collectPdfTokenAroundIndex(graphemes, index, 12).some((segment) => {
+      return PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment) || PDF_LATIN_COMBINING_MARK_PATTERN.test(segment);
+    });
+  }
+
+  function containsPdfSymbolTextForRouting(text) {
+    return PDF_SYMBOL_TEXT_PATTERN.test(ensureString(text));
+  }
+
+  function containsEmojiStyleForPdf(text) {
+    return PDF_EMOJI_STYLE_PATTERN.test(ensureString(text));
+  }
+
+  function collectPdfTokenAroundIndex(graphemes, index, maxLength) {
+    const output = [];
+    const start = Math.max(0, index - maxLength);
+    const end = Math.min(graphemes.length - 1, index + maxLength);
+    for (let cursor = start; cursor <= end; cursor += 1) {
+      const value = ensureString(graphemes[cursor]);
+      if (!value) {
+        continue;
+      }
+      if (cursor !== index && PDF_TOKEN_BREAK_PATTERN.test(value)) {
+        if (cursor < index) {
+          output.length = 0;
+          continue;
+        }
+        break;
+      }
+      output.push(value);
+    }
+    return output;
+  }
+
+  function resolveCjkPdfScript(graphemes, index, fontContext) {
+    const around = [
+      graphemes[index - 2] || '',
+      graphemes[index - 1] || '',
+      graphemes[index + 1] || '',
+      graphemes[index + 2] || ''
+    ].join('');
+    if (PDF_SCRIPT_DETECTION_PATTERNS.japanese.test(around)) {
+      return 'japanese';
+    }
+    if (PDF_SCRIPT_DETECTION_PATTERNS.korean.test(around)) {
+      return 'korean';
+    }
+
+    const detectedScripts = new Set(
+      fontContext && Array.isArray(fontContext.detectedScripts) ? fontContext.detectedScripts : []
+    );
+    const detectedLanguages = fontContext && Array.isArray(fontContext.detectedLanguages)
+      ? fontContext.detectedLanguages
+      : [];
+    const mainLanguage = fontContext && fontContext.mainLanguage ? fontContext.mainLanguage : '';
+
+    if (mainLanguage === 'ja' && detectedScripts.has('japanese')) {
+      return 'japanese';
+    }
+    if (mainLanguage === 'ko' && detectedScripts.has('korean')) {
+      return 'korean';
+    }
+    if (mainLanguage === 'zh' && detectedScripts.has('chinese')) {
+      return 'chinese';
+    }
+    if (detectedLanguages.indexOf('ja') !== -1 && detectedScripts.has('japanese')) {
+      return 'japanese';
+    }
+    if (detectedLanguages.indexOf('ko') !== -1 && detectedScripts.has('korean')) {
+      return 'korean';
+    }
+    if (detectedLanguages.indexOf('zh') !== -1 && detectedScripts.has('chinese')) {
+      return 'chinese';
+    }
+    if (detectedScripts.has('chinese') && !detectedScripts.has('japanese')) {
+      return 'chinese';
+    }
+    if (detectedScripts.has('japanese') && !detectedScripts.has('chinese')) {
+      return 'japanese';
+    }
+    if (detectedScripts.has('chinese')) {
+      return 'chinese';
+    }
+    if (detectedScripts.has('japanese')) {
+      return 'japanese';
+    }
+    if (detectedScripts.has('korean')) {
+      return 'korean';
+    }
+    return '';
   }
 
   function splitGraphemes(text) {
