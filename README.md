@@ -90,6 +90,7 @@ Everything runs locally.
 - Conversation metadata included in the document header
 - Support for formatted text, lists, quotes, code blocks, tables and HTML-derived content
 - Syntax-highlighted code rendering
+- Support for AI-generated images (embedded directly in the PDF output)
 
 ### Character support
 
