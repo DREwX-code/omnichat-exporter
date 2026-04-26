@@ -160,26 +160,23 @@ Used for generating PDF files directly in the browser.
 - Source: <https://github.com/bpampuch/pdfmake>
 - License: MIT
 
-No chat content is transmitted to any external PDF service.
-
 ### franc-min
 
 Used for local language detection before PDF generation.
 
-Source: https://github.com/wooorm/franc  
-License: MIT
+- Source: https://github.com/wooorm/franc  
+- License: MIT
 
 ### Noto Fonts
 
 Used for multilingual PDF rendering when required.
 
-Sources:
-- https://github.com/notofonts
-- https://github.com/google/fonts
-
-Licenses:
-- SIL Open Font License 1.1
-- Apache License 2.0
+- Sources:
+  - <https://github.com/notofonts>
+  - <https://github.com/google/fonts>
+- Licenses:
+  - SIL Open Font License 1.1
+  - Apache License 2.0
 
 ---
 
