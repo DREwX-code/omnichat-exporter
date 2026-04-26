@@ -7,6 +7,21 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.1.1] - 2026-04-26
+
+### Added
+- Support for AI-generated images in PDF export across supported platforms
+
+### Improved
+- Enhanced syntax highlighting consistency in PDF exports following recent AI interface updates
+- Improved Gemini export button injection reliability for dynamic UI environments
+- Reduced internal code complexity for better maintainability and stability
+
+### Fixed
+- Fixed Grok top-right export button not triggering full thread export correctly
+- Fixed DeepSeek PDF rendering for wide tables (no more horizontal clipping, full content preserved)
+
+
 ## [1.1.0] - 2026-03-14
 
 ### Added
