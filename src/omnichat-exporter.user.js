@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.1.0
+// @version      1.1.1
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -104,11 +104,15 @@
 // @connect esm.sh
 // @connect cdn.jsdelivr.net
 // @connect github.com
+// @connect lh3.googleusercontent.com
+// @connect *.googleusercontent.com
 
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js
 // @run-at       document-idle
 // @tag          utilities
+// @downloadURL https://update.greasyfork.org/scripts/567743/OmniChat%20Exporter%20-%20Export%20Any%20AI%20Chat%20Instantly.user.js
+// @updateURL https://update.greasyfork.org/scripts/567743/OmniChat%20Exporter%20-%20Export%20Any%20AI%20Chat%20Instantly.meta.js
 // ==/UserScript==
 
 /*
@@ -207,11 +211,14 @@ Licenses:
   const GEMINI_TURN_HOST_ATTR = 'data-omni-gemini-turn-host';
   const GEMINI_SHARE_BUTTON_SELECTOR =
     'button[data-test-id="share-and-export-menu-button"], button[data-test-id="share-button"], button[aria-label*="Partager et exporter"], button[aria-label*="Share and export"], button[aria-label*="Partager la conversation"], button[aria-label*="Share conversation"]';
+  const GEMINI_THREAD_SHARE_BUTTON_SELECTOR =
+    'button[data-test-id="share-and-export-menu-button"], button[aria-label*="Partager et exporter"], button[aria-label*="Share and export"], button[aria-label*="Partager la conversation"], button[aria-label*="Share conversation"]';
   const GEMINI_MENU_BUTTON_SELECTOR =
     'button[data-test-id="more-menu-button"], button[data-test-id="conversation-actions-menu-icon-button"]';
   const GEMINI_HEADER_SELECTOR = '.buttons-container.share';
   const GEMINI_THREAD_EXPORT_ATTR = 'data-omni-export-gemini-thread';
   const GEMINI_THREAD_NATIVE_ATTR = 'data-omni-gemini-native-thread';
+  const GEMINI_THREAD_FALLBACK_ATTR = 'data-omni-gemini-thread-fallback';
   const CLAUDE_HEADER_SELECTOR = '[data-testid="wiggle-controls-actions"]';
   const CLAUDE_SHARE_SELECTOR = '[data-testid="wiggle-controls-actions-share"]';
   const CLAUDE_THREAD_EXPORT_ATTR = 'data-omni-export-claude-thread';
@@ -233,6 +240,7 @@ Licenses:
   const MENU_ITEM_CLASS = 'omni-exporter-menu-item';
   const MENU_OPEN_CLASS = 'omni-exporter-menu-open';
   const STATUS_DURATION_MS = 1400;
+  const PROJECT_URL = 'https://github.com/DREwX-code/omnichat-exporter';
   const PDF_EXPORT_LOADER_ID = 'omni-exporter-pdf-loader';
   const PDF_EXPORT_LOADER_STAGE_ATTR = 'data-omni-pdf-stage';
   const PDF_LANGUAGE_DETECTOR_URL = 'https://esm.sh/franc-min@6.2.0/es2022/franc-min.bundle.mjs';
@@ -243,6 +251,80 @@ Licenses:
   const PDF_EMOJI_FONT_FAMILY = 'OpenMojiBlack';
   const PDF_EMOJI_FONT_FILE = 'OpenMoji-black-glyf.ttf';
   const PDF_CODE_DEFAULT_TEXT_COLOR = '#f8fafc';
+  const PDF_A4_WIDTH_PT = 595.28;
+  const PDF_PAGE_MARGINS = [42, 38, 42, 50];
+  const PDF_CONTENT_WIDTH_PT = PDF_A4_WIDTH_PT - PDF_PAGE_MARGINS[0] - PDF_PAGE_MARGINS[2];
+  const PDF_TABLE_SAFE_RIGHT_MARGIN_PT = 28;
+  const PDF_GEMINI_HLJS_TOKEN_STYLES = {
+    keyword: { color: '#c084fc', bold: true },
+    built_in: { color: '#fbbf24' },
+    type: { color: '#67e8f9' },
+    literal: { color: '#67e8f9' },
+    number: { color: '#fbbf24' },
+    regexp: { color: '#f472b6' },
+    string: { color: '#86efac' },
+    subst: { color: '#f8fafc' },
+    symbol: { color: '#93c5fd' },
+    class: { color: '#67e8f9' },
+    function: { color: '#93c5fd' },
+    title: { color: '#93c5fd' },
+    params: { color: '#f8fafc' },
+    comment: { color: '#94a3b8', italics: true },
+    doctag: { color: '#f472b6' },
+    meta: { color: '#94a3b8' },
+    section: { color: '#93c5fd', bold: true },
+    tag: { color: '#f472b6' },
+    name: { color: '#f472b6' },
+    attr: { color: '#fbbf24' },
+    attribute: { color: '#fbbf24' },
+    variable: { color: '#fda4af' },
+    template_variable: { color: '#fda4af' },
+    selector_id: { color: '#93c5fd' },
+    selector_class: { color: '#93c5fd' },
+    selector_attr: { color: '#fbbf24' },
+    selector_tag: { color: '#f472b6' },
+    addition: { color: '#86efac' },
+    deletion: { color: '#fda4af' }
+  };
+  const PDF_PRISM_TOKEN_STYLES = {
+    keyword: { color: '#c084fc', bold: true },
+    boolean: { color: '#fbbf24' },
+    number: { color: '#fbbf24' },
+    constant: { color: '#67e8f9' },
+    symbol: { color: '#93c5fd' },
+    deleted: { color: '#fda4af' },
+    string: { color: '#86efac' },
+    char: { color: '#86efac' },
+    builtin: { color: '#fbbf24' },
+    inserted: { color: '#86efac' },
+    operator: { color: '#f472b6' },
+    entity: { color: '#fbbf24' },
+    url: { color: '#93c5fd' },
+    variable: { color: '#fda4af' },
+    atrule: { color: '#93c5fd' },
+    attr_value: { color: '#86efac' },
+    function: { color: '#93c5fd' },
+    class_name: { color: '#67e8f9' },
+    regex: { color: '#f472b6' },
+    important: { color: '#f472b6', bold: true },
+    punctuation: { color: '#cbd5e1' },
+    property: { color: '#fbbf24' },
+    tag: { color: '#f472b6' },
+    attr_name: { color: '#fbbf24' },
+    namespace: { color: '#67e8f9' },
+    selector: { color: '#93c5fd' },
+    comment: { color: '#94a3b8', italics: true },
+    prolog: { color: '#94a3b8', italics: true },
+    doctype: { color: '#94a3b8', italics: true },
+    cdata: { color: '#94a3b8', italics: true },
+    parameter: { color: '#fda4af' },
+    interpolation: { color: '#f8fafc' },
+    interpolation_punctuation: { color: '#f472b6' },
+    template_string: { color: '#86efac' },
+    template_punctuation: { color: '#86efac' },
+    string_property: { color: '#fbbf24' },
+    literal_property: { color: '#fbbf24' }
+  };
   const NON_EXPORTABLE_NODE_SELECTOR =
     'button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"], ' +
     '.cdk-visually-hidden, .visually-hidden, .sr-only, [hidden]';
@@ -679,15 +761,19 @@ Licenses:
     hye: 'hy',
     zho: 'zh'
   };
-  let iconCounter = 0;
-  let activeMenu = null;
-  let activeMenuButton = null;
-  let menuCleanup = null;
-  let pdfMakeRef = null;
+let iconCounter = 0;
+let activeMenu = null;
+let activeMenuButton = null;
+let menuCleanup = null;
+let lastGeminiThreadInjectionLogKey = '';
+let pdfMakeRef = null;
   let activePdfFontContext = null;
   let activePdfEmojiFontFamily = '';
   let languageDetectorModulePromise = null;
   let pdfFontBase64Promises = Object.create(null);
+  let pdfImageDataUrlPromises = Object.create(null);
+  let trustedHtmlPolicyRef = null;
+  let trustedHtmlPolicyUnavailable = false;
   let emojiRegexRef = null;
   let graphemeSegmenterRef = null;
 
@@ -810,6 +896,25 @@ Licenses:
 .omni-exporter-btn[data-omni-export-claude-turn]:hover {
   color: #faf9f5 !important;
   background-color: rgba(156, 154, 146, 0.15);
+}
+
+.omni-exporter-gemini-floating {
+  position: fixed !important;
+  top: max(72px, env(safe-area-inset-top, 0px) + 16px) !important;
+  right: max(16px, env(safe-area-inset-right, 0px) + 16px) !important;
+  z-index: 999999 !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #1f2937 !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2) !important;
+  backdrop-filter: blur(14px);
+}
+
+.omni-exporter-gemini-floating:hover {
+  background: #ffffff !important;
 }
 
 .omni-exporter-pdf-loader {
@@ -1174,6 +1279,12 @@ Licenses:
     });
   }
 
+  function waitMs(duration) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, Math.max(0, Number(duration) || 0));
+    });
+  }
+
   function queueScanForNode(node) {
     if (!node) {
       return;
@@ -1300,34 +1411,40 @@ Licenses:
   }
 
   function attachGrokButtons(root) {
+    repairGrokExportButtonScopes(root);
     const shareButtons = [];
     if (root.matches && root.matches(GROK_SHARE_BUTTON_SELECTOR)) {
       shareButtons.push(root);
     }
     shareButtons.push(...root.querySelectorAll(GROK_SHARE_BUTTON_SELECTOR));
     shareButtons.forEach((shareButton) => {
-      if (shareButton.closest(GROK_HEADER_SELECTOR)) {
-        return;
-      }
+      const isTurnButton = isGrokMessageScopedElement(shareButton);
       const actionBar = shareButton.parentElement;
-      if (!actionBar || actionBar.querySelector(`[${GROK_EXPORT_ATTR}]`)) {
+      if (!actionBar) {
         return;
       }
-      const button = buildGrokNativeTurnButton(shareButton);
+      const existing = actionBar.querySelector(`[${GROK_EXPORT_ATTR}]`);
+      if (existing) {
+        normalizeGrokExportButtonScope(existing, isTurnButton ? 'turn' : 'thread');
+        return;
+      }
+      const button = buildGrokNativeExportButton(shareButton, isTurnButton ? 'turn' : 'thread');
       button.setAttribute(GROK_EXPORT_ATTR, 'true');
+      if (!isTurnButton) {
+        button.setAttribute(GROK_THREAD_EXPORT_ATTR, 'true');
+      }
       shareButton.insertAdjacentElement('afterend', button);
     });
   }
 
-  function buildGrokNativeTurnButton(referenceButton) {
+  function buildGrokNativeExportButton(referenceButton, scope) {
     const button = referenceButton.cloneNode(true);
     button.removeAttribute('id');
     button.removeAttribute('aria-controls');
     button.removeAttribute('aria-describedby');
     button.removeAttribute('data-radix-collection-item');
     button.setAttribute('type', 'button');
-    button.setAttribute('aria-label', 'Exporter ce chat');
-    button.setAttribute(EXPORT_SCOPE_ATTR, 'turn');
+    normalizeGrokExportButtonScope(button, scope || 'turn');
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('data-state', 'closed');
@@ -1340,101 +1457,195 @@ Licenses:
     return button;
   }
 
+  function buildGrokNativeTurnButton(referenceButton) {
+    return buildGrokNativeExportButton(referenceButton, 'turn');
+  }
+
+  function normalizeGrokExportButtonScope(button, scope) {
+    const nextScope = scope === 'thread' ? 'thread' : 'turn';
+    button.setAttribute(EXPORT_SCOPE_ATTR, nextScope);
+    button.setAttribute('aria-label', nextScope === 'thread' ? 'Exporter la conversation' : 'Exporter ce chat');
+    if (nextScope === 'thread') {
+      button.setAttribute(GROK_THREAD_EXPORT_ATTR, 'true');
+    } else {
+      button.removeAttribute(GROK_THREAD_EXPORT_ATTR);
+    }
+  }
+
+  function isGrokMessageScopedElement(element) {
+    if (!element) {
+      return false;
+    }
+    return getGrokMessageRoots().some((root) => root && root.contains && root.contains(element));
+  }
+
+  function repairGrokExportButtonScopes(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const buttons = [];
+    if (root && root.matches && root.matches(`[${GROK_EXPORT_ATTR}]`)) {
+      buttons.push(root);
+    }
+    buttons.push(...scope.querySelectorAll(`[${GROK_EXPORT_ATTR}]`));
+    buttons.forEach((button) => {
+      normalizeGrokExportButtonScope(button, isGrokMessageScopedElement(button) ? 'turn' : 'thread');
+    });
+  }
+
   function attachGeminiTurnButtons(root) {
     const scope = root || document;
     if (!scope.querySelectorAll) {
       return;
     }
+    collectGeminiTurnActionContainers(scope).forEach(attachGeminiTurnButtonToContainer);
+  }
+
+  function collectGeminiTurnActionContainers(scope) {
     const containers = [];
     if (scope.matches && scope.matches(GEMINI_ACTIONS_SELECTOR)) {
       containers.push(scope);
     }
     containers.push(...scope.querySelectorAll(GEMINI_ACTIONS_SELECTOR));
-    containers.forEach((container) => {
-      const shareButton = container.querySelector(GEMINI_SHARE_BUTTON_SELECTOR);
-      const referenceButton = shareButton || getGeminiTurnReferenceButton(container);
-      if (!referenceButton) {
-        return;
-      }
-      const shareAnchor = shareButton ? shareButton.closest('.tooltip-anchor-point') : null;
-      const moreMenuBlock = getGeminiTurnMenuBlock(container);
-      const referenceAnchor = referenceButton.closest('.tooltip-anchor-point');
-      const existingButton = container.querySelector(`[${GEMINI_TURN_EXPORT_ATTR}]`);
-      const existingNative = existingButton && existingButton.hasAttribute(GEMINI_TURN_NATIVE_ATTR);
+    return containers;
+  }
 
-      if (existingButton && !existingNative) {
-        const staleWrapper = existingButton.closest('.tooltip-anchor-point');
-        if (staleWrapper && staleWrapper !== shareAnchor && staleWrapper.childElementCount === 1) {
-          staleWrapper.remove();
-        } else {
-          existingButton.remove();
-        }
-      }
+  function attachGeminiTurnButtonToContainer(container) {
+    const context = getGeminiTurnButtonContext(container);
+    if (!context.referenceButton) {
+      return;
+    }
+    removeLegacyGeminiTurnButton(context);
+    refreshGeminiTurnExistingButton(context);
+    if (removeStaleGeminiNativeTurnButton(context)) {
+      refreshGeminiTurnExistingButton(context);
+    }
+    if (!context.existingNative) {
+      insertNewGeminiTurnButton(context);
+      return;
+    }
+    repositionGeminiTurnButton(context);
+  }
 
-      if (!existingNative) {
-        const nativeButton = buildGeminiNativeTurnButton(referenceButton);
-        if (shareAnchor) {
-          const wrapper = shareAnchor.cloneNode(false);
-          wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
-          wrapper.appendChild(nativeButton);
-          shareAnchor.insertAdjacentElement('afterend', wrapper);
-        } else if (moreMenuBlock) {
-          if (moreMenuBlock.matches('button')) {
-            moreMenuBlock.insertAdjacentElement('beforebegin', nativeButton);
-          } else {
-            const wrapper = moreMenuBlock.cloneNode(false);
-            wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
-            wrapper.appendChild(nativeButton);
-            moreMenuBlock.insertAdjacentElement('beforebegin', wrapper);
-          }
-        } else if (referenceAnchor) {
-          const wrapper = referenceAnchor.cloneNode(false);
-          wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
-          wrapper.appendChild(nativeButton);
-          referenceAnchor.insertAdjacentElement('beforebegin', wrapper);
-        } else {
-          referenceButton.insertAdjacentElement('beforebegin', nativeButton);
-        }
-        return;
-      }
+  function getGeminiTurnButtonContext(container) {
+    const shareButton = container.querySelector(GEMINI_SHARE_BUTTON_SELECTOR);
+    const referenceButton = getGeminiTurnReferenceButton(container) || shareButton;
+    return {
+      container,
+      shareButton,
+      referenceButton,
+      moreMenuBlock: getGeminiTurnMenuBlock(container),
+      shareAnchor: shareButton ? shareButton.closest('.tooltip-anchor-point') : null,
+      referenceAnchor: referenceButton ? referenceButton.closest('.tooltip-anchor-point') : null,
+      existingButton: null,
+      existingNative: false
+    };
+  }
 
-      const existingWrapper = existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
-        existingButton.closest('.tooltip-anchor-point');
-      if (shareAnchor) {
-        const correctTarget = shareAnchor.nextElementSibling;
-        if (existingWrapper) {
-          if (correctTarget !== existingWrapper) {
-            shareAnchor.insertAdjacentElement('afterend', existingWrapper);
-          }
-        } else if (correctTarget !== existingButton) {
-          shareAnchor.insertAdjacentElement('afterend', existingButton);
-        }
-      } else if (moreMenuBlock) {
-        let nodeToPlace = existingWrapper || existingButton;
-        if (!existingWrapper && !moreMenuBlock.matches('button')) {
-          const wrapper = moreMenuBlock.cloneNode(false);
-          wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
-          wrapper.appendChild(existingButton);
-          nodeToPlace = wrapper;
-        }
-        if (moreMenuBlock.previousElementSibling !== nodeToPlace) {
-          moreMenuBlock.insertAdjacentElement('beforebegin', nodeToPlace);
-        }
-      } else if (shareButton && shareButton.nextElementSibling !== existingButton) {
-        shareButton.insertAdjacentElement('afterend', existingButton);
-      } else if (referenceAnchor) {
-        const correctTarget = referenceAnchor.previousElementSibling;
-        if (existingWrapper) {
-          if (correctTarget !== existingWrapper) {
-            referenceAnchor.insertAdjacentElement('beforebegin', existingWrapper);
-          }
-        } else if (correctTarget !== existingButton) {
-          referenceAnchor.insertAdjacentElement('beforebegin', existingButton);
-        }
-      } else if (referenceButton.previousElementSibling !== existingButton) {
-        referenceButton.insertAdjacentElement('beforebegin', existingButton);
-      }
-    });
+  function refreshGeminiTurnExistingButton(context) {
+    context.existingButton = context.container.querySelector(`[${GEMINI_TURN_EXPORT_ATTR}]`);
+    context.existingNative = context.existingButton && context.existingButton.hasAttribute(GEMINI_TURN_NATIVE_ATTR);
+  }
+
+  function removeLegacyGeminiTurnButton(context) {
+    refreshGeminiTurnExistingButton(context);
+    if (!context.existingButton || context.existingNative) {
+      return;
+    }
+    const staleWrapper = context.existingButton.closest('.tooltip-anchor-point');
+    if (staleWrapper && staleWrapper !== context.shareAnchor && staleWrapper.childElementCount === 1) {
+      staleWrapper.remove();
+    } else {
+      context.existingButton.remove();
+    }
+  }
+
+  function removeStaleGeminiNativeTurnButton(context) {
+    if (!context.existingNative || !isStaleGeminiTurnButton(context.existingButton, context.referenceButton)) {
+      return false;
+    }
+    const staleWrapper = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
+      context.existingButton.closest('.tooltip-anchor-point');
+    if (staleWrapper && staleWrapper.childElementCount === 1) {
+      staleWrapper.remove();
+    } else {
+      context.existingButton.remove();
+    }
+    return true;
+  }
+
+  function insertNewGeminiTurnButton(context) {
+    const nativeButton = buildGeminiNativeTurnButton(context.referenceButton);
+    if (context.moreMenuBlock) {
+      insertGeminiButtonBeforeMenu(nativeButton, context.moreMenuBlock);
+      return;
+    }
+    if (context.shareAnchor) {
+      insertGeminiButtonWithHost(nativeButton, context.shareAnchor, 'afterend');
+      return;
+    }
+    if (context.referenceAnchor) {
+      insertGeminiButtonWithHost(nativeButton, context.referenceAnchor, 'beforebegin');
+      return;
+    }
+    context.referenceButton.insertAdjacentElement('beforebegin', nativeButton);
+  }
+
+  function insertGeminiButtonBeforeMenu(button, moreMenuBlock) {
+    if (moreMenuBlock.matches('button')) {
+      moreMenuBlock.insertAdjacentElement('beforebegin', button);
+      return;
+    }
+    insertGeminiButtonWithHost(button, moreMenuBlock, 'beforebegin');
+  }
+
+  function insertGeminiButtonWithHost(button, anchor, position) {
+    const wrapper = anchor.cloneNode(false);
+    wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
+    wrapper.appendChild(button);
+    anchor.insertAdjacentElement(position, wrapper);
+  }
+
+  function repositionGeminiTurnButton(context) {
+    const existingWrapper = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
+      context.existingButton.closest('.tooltip-anchor-point');
+    if (context.moreMenuBlock) {
+      moveGeminiButtonBeforeMenu(context.existingButton, existingWrapper, context.moreMenuBlock);
+      return;
+    }
+    if (context.shareAnchor) {
+      moveGeminiButtonNearAnchor(context.shareAnchor, 'afterend', context.shareAnchor.nextElementSibling, existingWrapper, context.existingButton);
+      return;
+    }
+    if (context.shareButton && context.shareButton.nextElementSibling !== context.existingButton) {
+      context.shareButton.insertAdjacentElement('afterend', context.existingButton);
+      return;
+    }
+    if (context.referenceAnchor) {
+      moveGeminiButtonNearAnchor(context.referenceAnchor, 'beforebegin', context.referenceAnchor.previousElementSibling, existingWrapper, context.existingButton);
+      return;
+    }
+    if (context.referenceButton.previousElementSibling !== context.existingButton) {
+      context.referenceButton.insertAdjacentElement('beforebegin', context.existingButton);
+    }
+  }
+
+  function moveGeminiButtonBeforeMenu(existingButton, existingWrapper, moreMenuBlock) {
+    let nodeToPlace = existingWrapper || existingButton;
+    if (!existingWrapper && !moreMenuBlock.matches('button')) {
+      const wrapper = moreMenuBlock.cloneNode(false);
+      wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
+      wrapper.appendChild(existingButton);
+      nodeToPlace = wrapper;
+    }
+    if (moreMenuBlock.previousElementSibling !== nodeToPlace) {
+      moreMenuBlock.insertAdjacentElement('beforebegin', nodeToPlace);
+    }
+  }
+
+  function moveGeminiButtonNearAnchor(anchor, position, correctTarget, existingWrapper, existingButton) {
+    const nodeToPlace = existingWrapper || existingButton;
+    if (correctTarget !== nodeToPlace) {
+      anchor.insertAdjacentElement(position, nodeToPlace);
+    }
   }
 
   function getGeminiTurnMenuBlock(container) {
@@ -1468,6 +1679,21 @@ Licenses:
       return menuButton;
     }
     return buttons.find((button) => !button.hasAttribute(GEMINI_TURN_EXPORT_ATTR)) || null;
+  }
+
+  function isStaleGeminiTurnButton(button, referenceButton) {
+    if (!button || !referenceButton) {
+      return false;
+    }
+    const referenceUsesMenuStyle = referenceButton.matches(GEMINI_MENU_BUTTON_SELECTOR) ||
+      referenceButton.classList.contains('more-menu-button') ||
+      referenceButton.classList.contains('mat-mdc-button');
+    if (!referenceUsesMenuStyle) {
+      return false;
+    }
+    return button.classList.contains('share-button') ||
+      button.classList.contains('mat-mdc-icon-button') ||
+      !button.classList.contains('more-menu-button');
   }
 
   function buildGeminiNativeTurnButton(referenceButton) {
@@ -1506,32 +1732,186 @@ Licenses:
   }
 
   function attachGeminiThreadButton(root) {
-    const shareContainer = document.querySelector(GEMINI_HEADER_SELECTOR);
-    if (!shareContainer) {
+    const anchor = findGeminiThreadAnchor(root);
+    let existingButton = getPrimaryGeminiThreadButton();
+    const existingIsNative = existingButton && existingButton.hasAttribute(GEMINI_THREAD_NATIVE_ATTR);
+    const existingIsFallback = existingButton && existingButton.hasAttribute(GEMINI_THREAD_FALLBACK_ATTR);
+
+    if (anchor) {
+      if (existingButton && (!existingIsNative || existingIsFallback)) {
+        existingButton.remove();
+        existingButton = null;
+      }
+      const button = existingButton || buildGeminiNativeThreadButton(anchor.referenceButton);
+      button.classList.remove('omni-exporter-gemini-floating');
+      button.removeAttribute(GEMINI_THREAD_FALLBACK_ATTR);
+      placeGeminiThreadButton(button, anchor);
+      logGeminiThreadInjection('anchored', anchor.name);
       return;
     }
 
-    const shareButton = shareContainer.querySelector(GEMINI_SHARE_BUTTON_SELECTOR);
-    if (!shareButton) {
+    const fallbackHost = getGeminiThreadFallbackHost();
+    if (!fallbackHost) {
+      logGeminiThreadInjection('missing-fallback-host', 'document.body is not available yet');
       return;
     }
 
-    const existingButton = shareContainer.querySelector(`[${GEMINI_THREAD_EXPORT_ATTR}]`);
-    const existingNative = existingButton && existingButton.hasAttribute(GEMINI_THREAD_NATIVE_ATTR);
-
-    if (existingButton && !existingNative) {
+    if (existingButton && !existingIsFallback) {
       existingButton.remove();
+      existingButton = null;
     }
 
-    if (!existingNative) {
-      const button = buildGeminiNativeThreadButton(shareButton);
-      shareContainer.insertBefore(button, shareButton);
+    const button = existingButton || buildGeminiFloatingThreadButton();
+    if (button.parentElement !== fallbackHost) {
+      fallbackHost.appendChild(button);
+    }
+    logGeminiThreadInjection('floating-fallback', 'no stable Gemini header anchor found');
+  }
+
+  function getPrimaryGeminiThreadButton() {
+    const buttons = Array.from(document.querySelectorAll(`[${GEMINI_THREAD_EXPORT_ATTR}]`));
+    if (buttons.length > 1) {
+      buttons.slice(1).forEach((button) => button.remove());
+      logGeminiThreadInjection('dedupe', `removed ${buttons.length - 1} duplicate thread button(s)`);
+    }
+    return buttons[0] || null;
+  }
+
+  function findGeminiThreadAnchor(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const candidates = [];
+
+    const addContainerCandidate = (name, container) => {
+      if (!isSafeGeminiThreadAnchor(container)) {
+        return;
+      }
+      const referenceButton =
+        container.querySelector(GEMINI_THREAD_SHARE_BUTTON_SELECTOR) ||
+        container.querySelector('button[aria-label*="Share"], button[aria-label*="Partager"]') ||
+        container.querySelector('button');
+      if (!referenceButton || !isSafeGeminiThreadAnchor(referenceButton)) {
+        return;
+      }
+      candidates.push({
+        name: name,
+        container: container,
+        referenceButton: referenceButton,
+        placement: 'before-reference'
+      });
+    };
+
+    const addButtonCandidate = (name, button) => {
+      if (!button || !isSafeGeminiThreadAnchor(button)) {
+        return;
+      }
+      candidates.push({
+        name: name,
+        container: button.parentElement || button,
+        referenceButton: button,
+        placement: 'before-reference'
+      });
+    };
+
+    addContainerCandidate('header-buttons-container', document.querySelector(GEMINI_HEADER_SELECTOR));
+
+    const threadShareButtons = Array.from(document.querySelectorAll(GEMINI_THREAD_SHARE_BUTTON_SELECTOR));
+    threadShareButtons.forEach((button, index) => {
+      addButtonCandidate(`thread-share-button-${index + 1}`, button);
+    });
+
+    const genericHeaderSelectors = [
+      'header',
+      '[role="banner"]',
+      '[data-test-id="conversation-header"]',
+      '[data-test-id="bard-header"]',
+      '.buttons-container',
+      '.conversation-header'
+    ];
+    genericHeaderSelectors.forEach((selector) => {
+      const nodes = Array.from(document.querySelectorAll(selector));
+      nodes.forEach((node, index) => {
+        addContainerCandidate(`${selector}-${index + 1}`, node);
+      });
+    });
+
+    const scopedHeader = scope.matches && isSafeGeminiThreadAnchor(scope)
+      ? scope
+      : null;
+    if (scopedHeader) {
+      addContainerCandidate('mutation-scope', scopedHeader);
+    }
+
+    return candidates.find((candidate) => {
+      return candidate &&
+        candidate.container &&
+        candidate.referenceButton &&
+        candidate.container.isConnected &&
+        candidate.referenceButton.isConnected;
+    }) || null;
+  }
+
+  function isSafeGeminiThreadAnchor(element) {
+    if (!element || !element.isConnected) {
+      return false;
+    }
+    if (element.closest && element.closest([
+      GEMINI_ACTIONS_SELECTOR,
+      GEMINI_CONVERSATION_SELECTOR,
+      'model-response',
+      'user-query',
+      'message-actions',
+      'response-container',
+      '.generated-image-controls',
+      '.attachment-container'
+    ].join(','))) {
+      return false;
+    }
+    if (element.hasAttribute && element.hasAttribute('hidden')) {
+      return false;
+    }
+    try {
+      const style = window.getComputedStyle(element);
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+        return false;
+      }
+    } catch (err) {
+    }
+    return true;
+  }
+
+  function placeGeminiThreadButton(button, anchor) {
+    button.setAttribute(GEMINI_THREAD_EXPORT_ATTR, 'true');
+    if (anchor.placement === 'before-reference' && anchor.referenceButton && anchor.referenceButton.parentElement) {
+      if (anchor.referenceButton.previousElementSibling !== button) {
+        anchor.referenceButton.insertAdjacentElement('beforebegin', button);
+      }
       return;
     }
-
-    if (existingButton && existingButton.nextElementSibling !== shareButton) {
-      shareContainer.insertBefore(existingButton, shareButton);
+    if (anchor.container && button.parentElement !== anchor.container) {
+      anchor.container.insertAdjacentElement('afterbegin', button);
     }
+  }
+
+  function buildGeminiFloatingThreadButton() {
+    const button = buildExportButton('thread');
+    button.setAttribute('aria-label', 'Exporter la conversation');
+    button.setAttribute(GEMINI_THREAD_EXPORT_ATTR, 'true');
+    button.setAttribute(GEMINI_THREAD_FALLBACK_ATTR, 'true');
+    button.classList.add('omni-exporter-gemini-floating');
+    return button;
+  }
+
+  function getGeminiThreadFallbackHost() {
+    return document.body || document.documentElement || null;
+  }
+
+  function logGeminiThreadInjection(state, detail) {
+    const key = `${state}:${detail || ''}`;
+    if (lastGeminiThreadInjectionLogKey === key) {
+      return;
+    }
+    lastGeminiThreadInjectionLogKey = key;
+    console.info(`OmniChat Gemini thread export: ${state}`, detail || '');
   }
 
   function buildGeminiNativeThreadButton(referenceButton) {
@@ -1831,7 +2211,15 @@ Licenses:
   function buildExportButton(scope, options) {
     const tagName = (options && options.tagName) || 'button';
     const button = document.createElement(tagName);
+    configureExportButtonElement(button, tagName);
+    button.setAttribute(EXPORT_SCOPE_ATTR, scope);
+    configureExportButtonClass(button, scope, options);
+    renderExportButtonContent(button, scope, options);
+    bindExportButtonEvents(button, tagName);
+    return button;
+  }
 
+  function configureExportButtonElement(button, tagName) {
     if (tagName === 'button') {
       button.type = 'button';
       button.setAttribute('aria-label', 'Exporter ce chat');
@@ -1840,47 +2228,65 @@ Licenses:
       button.setAttribute('tabindex', '0');
       button.setAttribute('aria-label', 'Exporter ce chat');
     }
-
-    button.setAttribute(EXPORT_SCOPE_ATTR, scope);
-
     if (platform === 'chatgpt' && tagName === 'button') {
       button.setAttribute('data-state', 'closed');
       button.setAttribute('data-radix-tooltip-trigger', '');
     }
+  }
 
+  function configureExportButtonClass(button, scope, options) {
     const extraClasses = options && options.extraClasses ? ` ${options.extraClasses}` : '';
     const overrideClassName = options && options.overrideClassName ? options.overrideClassName : '';
-
     button.className = overrideClassName || `${EXPORT_BUTTON_CLASS}${extraClasses}`;
-
     if (platform === 'chatgpt' && scope === 'turn' && !overrideClassName) {
       button.className = `${EXPORT_BUTTON_CLASS} text-token-text-secondary hover:bg-token-bg-secondary rounded-lg`;
+    }
+  }
+
+  function renderExportButtonContent(button, scope, options) {
+    const usesChatGptTurnMarkup = platform === 'chatgpt' && scope === 'turn' &&
+      !(options && options.overrideClassName);
+    if (usesChatGptTurnMarkup) {
       button.innerHTML = `
       <span class="flex items-center justify-center touch:w-10 h-8 w-8">
         ${buildExportIcon()}
       </span>
     `;
-    } else if (options && options.useDeepSeekMarkup) {
+      return;
+    }
+    if (options && options.useDeepSeekMarkup) {
+      renderDeepSeekStyleExportButton(button);
+      return;
+    }
+    renderDefaultExportButtonIcon(button, scope);
+  }
+
+  function renderDeepSeekStyleExportButton(button) {
       button.innerHTML = `
 <div class="ds-icon-button__hover-bg"></div>
 <div class="ds-icon">${platform === 'gemini' ? '' : buildExportIcon()}</div>
 <div class="ds-focus-ring"></div>`;
-      if (platform === 'gemini') {
-        const iconDiv = button.querySelector('.ds-icon');
-        if (iconDiv) {
-          iconDiv.appendChild(buildExportIconElement());
-        }
-      }
-    } else {
-      if (platform === 'gemini') {
-        button.appendChild(buildExportIconElement());
-      } else if (platform === 'grok' && scope === 'turn') {
-        button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon()}</span>`;
-      } else {
-        button.innerHTML = buildExportIcon();
+    if (platform === 'gemini') {
+      const iconDiv = button.querySelector('.ds-icon');
+      if (iconDiv) {
+        iconDiv.appendChild(buildExportIconElement());
       }
     }
+  }
 
+  function renderDefaultExportButtonIcon(button, scope) {
+    if (platform === 'gemini') {
+      button.appendChild(buildExportIconElement());
+      return;
+    }
+    if (platform === 'grok' && scope === 'turn') {
+      button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon()}</span>`;
+      return;
+    }
+    button.innerHTML = buildExportIcon();
+  }
+
+  function bindExportButtonEvents(button, tagName) {
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1894,7 +2300,6 @@ Licenses:
         }
       });
     }
-    return button;
   }
 
   function syncButtonSize(button, reference) {
@@ -2052,64 +2457,14 @@ Licenses:
   async function handleExportFormat(format, button) {
     const isPdfExport = format === 'pdf';
     if (isPdfExport) {
-      showPdfExportLoader({
-        stage: 'Scanning chat content...',
-        detail: 'Collecting messages before PDF generation.',
-        progress: 0.06,
-        progressText: 'Step 1 of 4',
-        indeterminate: false
-      });
-      await waitForNextPaint();
+      await showInitialPdfExportLoader();
     }
     try {
-      const scope = button.getAttribute(EXPORT_SCOPE_ATTR) || 'turn';
-      const anchorTurn = findAnchorTurn(button);
-      if (scope !== 'thread' && !anchorTurn) {
-        flashButton(button, 'Err: No message', 'error');
+      const context = await buildExportContext(button);
+      if (!context) {
         return;
       }
-      const turns = scope === 'thread' ? getAllTurns() : getRelatedTurns(anchorTurn);
-      let messages = collectMessagesFromTurns(turns);
-
-      if (platform === 'chatgpt' && scope === 'thread') {
-        const apiMessages = await getChatGptConversationMessages();
-        if (apiMessages && apiMessages.length) {
-          messages = apiMessages;
-        }
-      }
-
-      if (!messages.length) {
-        flashButton(button, 'Err: 0 messages found', 'error');
-        console.warn('OmniChat: No messages found with selectors', turns);
-        return;
-      }
-      if (format === 'pdf') {
-        const exported = await exportPdf(messages);
-        if (!exported) {
-          flashButton(button, 'Export unavailable', 'error');
-          return;
-        }
-        flashButton(button, 'Export ok', 'success');
-        return;
-      }
-      if (format === 'json') {
-        const content = buildExportJson(messages);
-        const filename = buildExportFilename('json', scope === 'thread' ? null : anchorTurn);
-        downloadText(content, filename, 'application/json');
-        flashButton(button, 'Export ok', 'success');
-        return;
-      }
-      if (format === 'txt') {
-        const content = buildExportText(messages);
-        const filename = buildExportFilename('txt', scope === 'thread' ? null : anchorTurn);
-        downloadText(content, filename, 'text/plain');
-        flashButton(button, 'Export ok', 'success');
-        return;
-      }
-      const content = buildExportMarkdown(messages);
-      const filename = buildExportFilename('md', scope === 'thread' ? null : anchorTurn);
-      downloadText(content, filename, 'text/markdown');
-      flashButton(button, 'Export ok', 'success');
+      await exportMessagesInFormat(format, context, button);
     } catch (err) {
       console.error('OmniChat export error:', err);
       flashButton(button, 'Export failed', 'error');
@@ -2118,6 +2473,85 @@ Licenses:
         hidePdfExportLoader();
       }
     }
+  }
+
+  async function showInitialPdfExportLoader() {
+    showPdfExportLoader({
+      stage: 'Scanning chat content...',
+      detail: 'Collecting messages before PDF generation.',
+      progress: 0.06,
+      progressText: 'Step 1 of 5',
+      indeterminate: false
+    });
+    await waitForNextPaint();
+  }
+
+  async function buildExportContext(button) {
+    const scope = button.getAttribute(EXPORT_SCOPE_ATTR) || 'turn';
+    const anchorTurn = findAnchorTurn(button);
+    if (scope !== 'thread' && !anchorTurn) {
+      flashButton(button, 'Err: No message', 'error');
+      return null;
+    }
+
+    const collected = await collectExportMessages(scope, anchorTurn);
+    if (!collected.messages.length) {
+      flashButton(button, 'Err: 0 messages found', 'error');
+      console.warn('OmniChat: No messages found with selectors', collected.turns);
+      return null;
+    }
+
+    return {
+      scope,
+      anchorTurn,
+      turns: collected.turns,
+      messages: collected.messages
+    };
+  }
+
+  async function collectExportMessages(scope, anchorTurn) {
+    let turns = [];
+    let messages = [];
+    if (platform === 'deepseek' && scope === 'thread') {
+      messages = await collectDeepSeekThreadMessagesFromVirtualScroll();
+      turns = getAllTurns();
+      if (!messages.length) {
+        messages = collectMessagesFromTurns(turns);
+      }
+    } else {
+      turns = scope === 'thread' ? getAllTurns() : getRelatedTurns(anchorTurn);
+      messages = collectMessagesFromTurns(turns);
+    }
+
+    if (platform === 'chatgpt' && scope === 'thread' && !messagesHaveExportableImages(messages)) {
+      const apiMessages = await getChatGptConversationMessages();
+      if (apiMessages && apiMessages.length) {
+        messages = apiMessages;
+      }
+    }
+    return { turns, messages };
+  }
+
+  async function exportMessagesInFormat(format, context, button) {
+    if (format === 'pdf') {
+      const exported = await exportPdf(context.messages);
+      flashButton(button, exported ? 'Export ok' : 'Export unavailable', exported ? 'success' : 'error');
+      return;
+    }
+    const filename = buildExportFilename(format, context.scope === 'thread' ? null : context.anchorTurn);
+    const payload = buildExportPayload(format, context.messages);
+    downloadText(payload.content, filename, payload.mimeType);
+    flashButton(button, 'Export ok', 'success');
+  }
+
+  function buildExportPayload(format, messages) {
+    if (format === 'json') {
+      return { content: buildExportJson(messages), mimeType: 'application/json' };
+    }
+    if (format === 'txt') {
+      return { content: buildExportText(messages), mimeType: 'text/plain' };
+    }
+    return { content: buildExportMarkdown(messages), mimeType: 'text/markdown' };
   }
 
   function findAnchorTurn(button) {
@@ -2185,61 +2619,85 @@ Licenses:
   }
 
   function getRelatedTurns(anchorTurn) {
-    if (platform === 'gemini') {
-      const geminiConversation = resolveGeminiConversation(anchorTurn);
-      if (geminiConversation) {
-        const geminiTurns = getGeminiRootsFromConversation(geminiConversation);
-        if (geminiTurns.length) {
-          return geminiTurns;
-        }
-        return [geminiConversation];
-      }
+    const geminiTurns = getGeminiRelatedTurns(anchorTurn);
+    if (geminiTurns) {
+      return geminiTurns;
     }
 
     const turns = getAllTurns();
-    let resolvedAnchor = anchorTurn;
+    const resolved = resolveIndexedAnchorTurn(anchorTurn, turns);
+    if (resolved.index === -1) {
+      return [resolved.anchor];
+    }
+
+    const role = getTurnRole(resolved.anchor);
+    if (role === 'assistant') {
+      return getAssistantRelatedTurns(turns, resolved.index, resolved.anchor);
+    }
+    if (role === 'user') {
+      return getUserRelatedTurns(turns, resolved.index, resolved.anchor);
+    }
+    return getFallbackRelatedTurns(turns, resolved.index, resolved.anchor);
+  }
+
+  function getGeminiRelatedTurns(anchorTurn) {
+    if (platform !== 'gemini') {
+      return null;
+    }
+    const geminiConversation = resolveGeminiConversation(anchorTurn);
+    if (!geminiConversation) {
+      return null;
+    }
+    const geminiTurns = getGeminiRootsFromConversation(geminiConversation);
+    return geminiTurns.length ? geminiTurns : [geminiConversation];
+  }
+
+  function resolveIndexedAnchorTurn(anchorTurn, turns) {
+    let anchor = anchorTurn;
     let index = turns.indexOf(anchorTurn);
     if (index === -1 && platform === 'deepseek') {
-      const resolved = resolveDeepSeekTurn(anchorTurn);
-      if (resolved) {
-        resolvedAnchor = resolved;
-        index = turns.indexOf(resolved);
+      const deepSeekTurn = resolveDeepSeekTurn(anchorTurn);
+      if (deepSeekTurn) {
+        anchor = deepSeekTurn;
+        index = turns.indexOf(deepSeekTurn);
       }
     }
-    if (index === -1) {
-      return [resolvedAnchor];
-    }
-    const role = getTurnRole(resolvedAnchor);
+    return { anchor, index };
+  }
+
+  function getAssistantRelatedTurns(turns, index, anchor) {
     const related = [];
-    if (role === 'assistant') {
-      const previousUser = findAdjacentTurn(turns, index, 'prev', 'user');
-      if (previousUser) {
-        related.push(previousUser);
-      }
-      related.push(resolvedAnchor);
-    } else if (role === 'user') {
-      related.push(resolvedAnchor);
-      const nextAssistant = findAdjacentTurn(turns, index, 'next', 'assistant');
-      if (nextAssistant) {
-        related.push(nextAssistant);
-      }
-    } else {
-      if (platform === 'gemini' && resolvedAnchor.matches && resolvedAnchor.matches(GEMINI_CONVERSATION_SELECTOR)) {
-        const geminiTurns = getGeminiRootsFromConversation(resolvedAnchor);
-        if (geminiTurns.length) {
-          return geminiTurns;
-        }
-      }
-      if (platform === 'grok' || platform === 'deepseek') {
-        const previousTurn = turns[index - 1];
-        if (previousTurn) {
-          related.push(previousTurn, resolvedAnchor);
-          return related;
-        }
-      }
-      related.push(resolvedAnchor);
+    const previousUser = findAdjacentTurn(turns, index, 'prev', 'user');
+    if (previousUser) {
+      related.push(previousUser);
+    }
+    related.push(anchor);
+    return related;
+  }
+
+  function getUserRelatedTurns(turns, index, anchor) {
+    const related = [anchor];
+    const nextAssistant = findAdjacentTurn(turns, index, 'next', 'assistant');
+    if (nextAssistant) {
+      related.push(nextAssistant);
     }
     return related;
+  }
+
+  function getFallbackRelatedTurns(turns, index, anchor) {
+    if (platform === 'gemini' && anchor.matches && anchor.matches(GEMINI_CONVERSATION_SELECTOR)) {
+      const geminiTurns = getGeminiRootsFromConversation(anchor);
+      if (geminiTurns.length) {
+        return geminiTurns;
+      }
+    }
+    if (platform === 'grok' || platform === 'deepseek') {
+      const previousTurn = turns[index - 1];
+      if (previousTurn) {
+        return [previousTurn, anchor];
+      }
+    }
+    return [anchor];
   }
 
   function resolveGeminiConversation(anchorTurn) {
@@ -2304,7 +2762,7 @@ Licenses:
               node.getAttribute('data-testid') === 'assistant-message' ? 'assistant' :
                 (node.matches && node.matches('.font-claude-response') ? 'assistant' : 'message'));
           const content = extractMessageContent(node);
-          if (content && content.text) {
+          if (hasCollectedContent(content)) {
             messages.push(buildCollectedMessage(role, content));
           }
         });
@@ -2312,7 +2770,7 @@ Licenses:
       }
       const role = inferRoleFromRoot(turn) || 'message';
       const content = extractMessageContentFromRoot(turn);
-      if (content && content.text) {
+      if (hasCollectedContent(content)) {
         messages.push(buildCollectedMessage(role, content));
       }
     });
@@ -2334,7 +2792,7 @@ Licenses:
           const role = node.getAttribute('data-message-author-role') ||
             inferRoleFromRoot(node) || 'message';
           const content = extractMessageContent(node);
-          if (content && content.text) {
+          if (hasCollectedContent(content)) {
             messages.push(buildCollectedMessage(role, content));
           }
         });
@@ -2344,16 +2802,26 @@ Licenses:
       const contentNodes = filterTopLevelNodes(
         Array.from(scope.querySelectorAll('.markdown, [data-message-content], .prose, .whitespace-pre-wrap'))
       );
+      let collectedFromContentNodes = false;
       contentNodes.forEach((node) => {
         const roleNode = node.closest('[data-message-author-role]');
         const role = roleNode ? roleNode.getAttribute('data-message-author-role') :
           inferRoleFromRoot(scope) || 'message';
 
         const content = extractMessageContent(node);
-        if (content && content.text) {
+        if (hasCollectedContent(content)) {
           messages.push(buildCollectedMessage(role, content));
+          collectedFromContentNodes = true;
         }
       });
+
+      if (!collectedFromContentNodes && nodeHasExportableImages(scope)) {
+        const role = inferRoleFromRoot(scope) || 'assistant';
+        const content = extractMessageContentFromRoot(scope);
+        if (hasCollectedContent(content)) {
+          messages.push(buildCollectedMessage(role, content));
+        }
+      }
     };
 
     if (Array.isArray(turns)) {
@@ -2425,7 +2893,7 @@ Licenses:
         return;
       }
       const content = extractChatGptMessageContent(node.message);
-      if (content && content.text) {
+      if (hasCollectedContent(content)) {
         messages.push({ role, text: content.text, html: content.html });
       }
     });
@@ -2484,7 +2952,7 @@ Licenses:
       const role = node.getAttribute('data-message-author-role') ||
         inferRoleFromRoot(node) || 'message';
       const content = extractMessageContent(node);
-      if (content && content.text) {
+      if (hasCollectedContent(content)) {
         messages.push(buildCollectedMessage(role, content));
       }
     });
@@ -2501,6 +2969,30 @@ Licenses:
       message.sourceNode = content.sourceNode;
     }
     return message;
+  }
+
+  function hasCollectedContent(content) {
+    if (!content) {
+      return false;
+    }
+    if (normalizeText(ensureString(content.text))) {
+      return true;
+    }
+    if (htmlHasExportableImages(content.html)) {
+      return true;
+    }
+    return nodeHasExportableImages(content.sourceNode);
+  }
+
+  function messagesHaveExportableImages(messages) {
+    return (messages || []).some((message) => {
+      return htmlHasExportableImages(message && message.html) ||
+        nodeHasExportableImages(message && message.sourceNode);
+    });
+  }
+
+  function htmlHasExportableImages(html) {
+    return /<img\b/i.test(ensureString(html));
   }
 
   function isAssistantSparse(messages) {
@@ -2703,10 +3195,12 @@ Licenses:
       return [];
     }
     const roots = [];
-    const userRoot = conversation.querySelector(
-      'user-query-content .query-content .query-text, user-query-content .query-content, user-query .query-text'
-    );
-    if (userRoot && normalizeText(userRoot.innerText || '')) {
+    const userRoot =
+      conversation.querySelector('user-query-content .user-query-container') ||
+      conversation.querySelector('user-query-content') ||
+      conversation.querySelector('user-query') ||
+      conversation.querySelector('user-query-content .query-content .query-text, user-query-content .query-content, user-query .query-text');
+    if (userRoot && (normalizeText(userRoot.innerText || '') || nodeHasExportableImages(userRoot))) {
       roots.push(userRoot);
     }
 
@@ -2715,7 +3209,7 @@ Licenses:
     )).filter((node, index, self) => !self.some((other, otherIndex) => otherIndex !== index && other.contains(node)));
 
     assistantRoots.forEach((assistantRoot) => {
-      if (normalizeText(assistantRoot.innerText || '')) {
+      if (normalizeText(assistantRoot.innerText || '') || nodeHasExportableImages(assistantRoot)) {
         roots.push(assistantRoot);
       }
     });
@@ -2833,7 +3327,7 @@ Licenses:
           return null;
         }
         const content = extractMessageContentFromRoot(sibling);
-        if (content && content.text) {
+        if (hasCollectedContent(content)) {
           return sibling;
         }
       }
@@ -2871,6 +3365,217 @@ Licenses:
     return uniqueRoots;
   }
 
+  async function collectDeepSeekThreadMessagesFromVirtualScroll() {
+    const scroller = findDeepSeekConversationScroller();
+    if (!scroller) {
+      console.info('OmniChat DeepSeek thread export: no scroll container found, using visible DOM only');
+      return collectMessagesFromTurns(getDeepSeekMessageRoots());
+    }
+
+    const originalTop = getScrollTop(scroller);
+    const originalBehavior = scroller.style && scroller.style.scrollBehavior;
+    if (scroller.style) {
+      scroller.style.scrollBehavior = 'auto';
+    }
+
+    const collected = [];
+    const seen = new Set();
+    const captureVisibleMessages = () => {
+      const roots = getDeepSeekMessageRoots();
+      const messages = collectMessagesFromTurns(roots);
+      messages.forEach((message) => {
+        const key = buildDeepSeekCollectedMessageKey(message);
+        if (!key || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        collected.push(message);
+      });
+    };
+
+    try {
+      console.info('OmniChat DeepSeek thread export: scanning virtualized chat');
+      await scrollDeepSeekScrollerToStableTop(scroller, captureVisibleMessages);
+
+      let lastTop = -1;
+      let stablePasses = 0;
+      const maxPasses = 80;
+      for (let pass = 0; pass < maxPasses; pass += 1) {
+        captureVisibleMessages();
+        const currentTop = getScrollTop(scroller);
+        const maxTop = getScrollMaxTop(scroller);
+        if (currentTop >= maxTop - 4) {
+          break;
+        }
+        if (Math.abs(currentTop - lastTop) < 2) {
+          stablePasses += 1;
+        } else {
+          stablePasses = 0;
+        }
+        if (stablePasses >= 3) {
+          break;
+        }
+        lastTop = currentTop;
+        const step = Math.max(260, Math.floor(getScrollClientHeight(scroller) * 0.72));
+        setScrollTop(scroller, Math.min(maxTop, currentTop + step));
+        await waitForDeepSeekScrollSettle(scroller);
+      }
+      captureVisibleMessages();
+      console.info(`OmniChat DeepSeek thread export: collected ${collected.length} message(s)`);
+      return collected;
+    } finally {
+      setScrollTop(scroller, originalTop);
+      if (scroller.style) {
+        scroller.style.scrollBehavior = originalBehavior || '';
+      }
+      await waitForDeepSeekScrollSettle(scroller);
+    }
+  }
+
+  function findDeepSeekConversationScroller() {
+    const candidates = [];
+    const addCandidate = (node) => {
+      if (!node || candidates.includes(node)) {
+        return;
+      }
+      candidates.push(node);
+    };
+
+    addCandidate(document.scrollingElement || document.documentElement);
+    const scopedSelectors = [
+      'main',
+      '[class*="chat"]',
+      '[class*="conversation"]',
+      '[class*="scroll"]',
+      '[data-virtual-list]',
+      '[data-testid*="chat"]'
+    ];
+    scopedSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach(addCandidate);
+    });
+    document.querySelectorAll('div').forEach((node) => {
+      if (node.scrollHeight > node.clientHeight + 80) {
+        addCandidate(node);
+      }
+    });
+
+    return candidates
+      .filter(isDeepSeekConversationScroller)
+      .sort((a, b) => {
+        const aScore = scoreDeepSeekScroller(a);
+        const bScore = scoreDeepSeekScroller(b);
+        return bScore - aScore;
+      })[0] || null;
+  }
+
+  async function scrollDeepSeekScrollerToStableTop(scroller, captureVisibleMessages) {
+    let lastMaxTop = -1;
+    let stableTopPasses = 0;
+    for (let pass = 0; pass < 10; pass += 1) {
+      setScrollTop(scroller, 0);
+      await waitForDeepSeekScrollSettle(scroller);
+      if (typeof captureVisibleMessages === 'function') {
+        captureVisibleMessages();
+      }
+      const currentTop = getScrollTop(scroller);
+      const maxTop = getScrollMaxTop(scroller);
+      if (currentTop <= 2 && Math.abs(maxTop - lastMaxTop) < 2) {
+        stableTopPasses += 1;
+      } else {
+        stableTopPasses = 0;
+      }
+      if (stableTopPasses >= 2) {
+        break;
+      }
+      lastMaxTop = maxTop;
+    }
+  }
+
+  function isDeepSeekConversationScroller(node) {
+    if (!node || !node.querySelector) {
+      return false;
+    }
+    if (node.closest && node.closest('.ds-markdown, .md-code-block, table')) {
+      return false;
+    }
+    if (!node.querySelector('.ds-message, .ds-markdown, [data-virtual-list-item-key]')) {
+      return false;
+    }
+    if (getScrollMaxTop(node) <= 80) {
+      return false;
+    }
+    try {
+      const style = window.getComputedStyle(node);
+      const overflow = `${style.overflowY} ${style.overflow}`;
+      if (!/(auto|scroll|overlay|visible)/i.test(overflow) && node !== document.scrollingElement) {
+        return false;
+      }
+    } catch (err) {
+    }
+    return true;
+  }
+
+  function scoreDeepSeekScroller(node) {
+    let score = getScrollMaxTop(node);
+    if (node.matches && node.matches('main')) {
+      score += 500;
+    }
+    if (node.querySelectorAll) {
+      score += Math.min(1000, node.querySelectorAll('.ds-message, [data-virtual-list-item-key]').length * 120);
+    }
+    if (node === document.scrollingElement || node === document.documentElement || node === document.body) {
+      score -= 150;
+    }
+    return score;
+  }
+
+  function buildDeepSeekCollectedMessageKey(message) {
+    const role = ensureString(message && message.role);
+    const text = normalizeText(ensureString(message && message.text)).slice(0, 600);
+    const html = ensureString(message && message.html).slice(0, 600);
+    return `${role}:${text || html}`;
+  }
+
+  function getScrollTop(scroller) {
+    if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    }
+    return scroller.scrollTop || 0;
+  }
+
+  function setScrollTop(scroller, top) {
+    const value = Math.max(0, Number(top) || 0);
+    if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      window.scrollTo(0, value);
+      document.documentElement.scrollTop = value;
+      document.body.scrollTop = value;
+      return;
+    }
+    scroller.scrollTop = value;
+  }
+
+  function getScrollMaxTop(scroller) {
+    if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      const scrolling = document.scrollingElement || document.documentElement;
+      return Math.max(0, scrolling.scrollHeight - window.innerHeight);
+    }
+    return Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  }
+
+  function getScrollClientHeight(scroller) {
+    if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      return window.innerHeight || document.documentElement.clientHeight || 600;
+    }
+    return scroller.clientHeight || 600;
+  }
+
+  async function waitForDeepSeekScrollSettle(scroller) {
+    await waitForNextPaint();
+    await waitMs(160);
+    queueScanForNode(scroller);
+    await waitForNextPaint();
+  }
+
   function inferRoleFromRoot(root) {
     const directRole = root.getAttribute('data-message-author-role') ||
       root.getAttribute('data-message-role') ||
@@ -2878,64 +3583,96 @@ Licenses:
     if (directRole) {
       return directRole;
     }
+    const platformRole = inferPlatformRoleFromRoot(root);
+    if (platformRole) {
+      return platformRole;
+    }
+    return inferGenericRoleFromRoot(root);
+  }
+
+  function inferPlatformRoleFromRoot(root) {
     if (platform === 'claude') {
-      const testId = root.getAttribute('data-testid');
-      if (testId === 'user-message') {
-        return 'user';
-      }
-      if (testId === 'assistant-message') {
-        return 'assistant';
-      }
-      if (root.matches && root.matches('.font-claude-response')) {
-        return 'assistant';
-      }
-      if (root.querySelector && root.querySelector('[data-testid="user-message"]')) {
-        return 'user';
-      }
-      if (root.querySelector && root.querySelector('.font-claude-response')) {
-        return 'assistant';
-      }
+      return inferClaudeRoleFromRoot(root);
     }
     if (platform === 'deepseek') {
-      if (root.querySelector('.ds-markdown')) {
-        return 'assistant';
-      }
-      if (root.querySelector('.fbb737a4, ._72b6158')) {
-        return 'user';
-      }
+      return inferDeepSeekRoleFromRoot(root);
     }
     if (platform === 'gemini') {
-      if (
-        root.matches && (
-          root.matches('user-query, user-query-content, .query-content, .query-text') ||
-          root.closest('user-query')
-        )
-      ) {
-        return 'user';
-      }
-      if (
-        root.matches && (
-          root.matches('model-response, message-content, .model-response-text, .markdown') ||
-          root.closest('model-response')
-        )
-      ) {
-        return 'assistant';
-      }
+      return inferGeminiRoleFromRoot(root);
     }
     if (platform === 'grok') {
-      if (root.matches && root.matches('.items-end')) {
-        return 'user';
-      }
-      if (root.matches && root.matches('.items-start')) {
-        return 'assistant';
-      }
-      if (root.querySelector && root.querySelector('.message-bubble.bg-surface-l1')) {
-        return 'user';
-      }
-      if (root.querySelector && root.querySelector('.response-content-markdown')) {
-        return 'assistant';
-      }
+      return inferGrokRoleFromRoot(root);
     }
+    return null;
+  }
+
+  function inferClaudeRoleFromRoot(root) {
+    const testId = root.getAttribute('data-testid');
+    if (testId === 'user-message') {
+      return 'user';
+    }
+    if (testId === 'assistant-message') {
+      return 'assistant';
+    }
+    if (root.matches && root.matches('.font-claude-response')) {
+      return 'assistant';
+    }
+    if (root.querySelector && root.querySelector('[data-testid="user-message"]')) {
+      return 'user';
+    }
+    if (root.querySelector && root.querySelector('.font-claude-response')) {
+      return 'assistant';
+    }
+    return null;
+  }
+
+  function inferDeepSeekRoleFromRoot(root) {
+    if (root.querySelector('.ds-markdown')) {
+      return 'assistant';
+    }
+    if (root.querySelector('.fbb737a4, ._72b6158')) {
+      return 'user';
+    }
+    return null;
+  }
+
+  function inferGeminiRoleFromRoot(root) {
+    if (
+      root.matches && (
+        root.matches('user-query, user-query-content, .query-content, .query-text') ||
+        root.closest('user-query')
+      )
+    ) {
+      return 'user';
+    }
+    if (
+      root.matches && (
+        root.matches('model-response, message-content, .model-response-text, .markdown') ||
+        root.closest('model-response')
+      )
+    ) {
+      return 'assistant';
+    }
+    return null;
+  }
+
+  function inferGrokRoleFromRoot(root) {
+    if (root.matches && root.matches('.items-end')) {
+      return 'user';
+    }
+    if (root.matches && root.matches('.items-start')) {
+      return 'assistant';
+    }
+    if (root.querySelector && root.querySelector('.message-bubble.bg-surface-l1')) {
+      return 'user';
+    }
+    if (root.querySelector && root.querySelector('.response-content-markdown')) {
+      return 'assistant';
+    }
+    return null;
+  }
+
+  function inferGenericRoleFromRoot(root) {
     const roleNode = root.querySelector('[data-message-author-role], [data-message-role], [data-role]');
     if (roleNode) {
       return roleNode.getAttribute('data-message-author-role') ||
@@ -2975,8 +3712,205 @@ Licenses:
     if (!root || !root.querySelectorAll) {
       return;
     }
+    normalizeExportableImages(root);
     const unwanted = root.querySelectorAll(NON_EXPORTABLE_NODE_SELECTOR);
-    unwanted.forEach((el) => el.remove());
+    unwanted.forEach((el) => {
+      if (nodeHasExportableImages(el) && replaceNodeWithExportableImages(el)) {
+        return;
+      }
+      el.remove();
+    });
+  }
+
+  function normalizeExportableImages(root) {
+    if (!root || !root.querySelectorAll) {
+      return;
+    }
+    removeExportImageControls(root);
+    replaceInteractiveImageContainers(root);
+    wrapLooseExportableImages(root);
+  }
+
+  function removeExportImageControls(root) {
+    const selector = [
+      '[data-testid="image-gen-overlay-actions"]',
+      '[data-testid="image-gen-overlay-left-actions"]',
+      '[data-testid="image-gen-overlay-right-actions"]',
+      '.generated-image-controls',
+      '.overlay-container share-button',
+      '.overlay-container copy-button',
+      '.overlay-container download-generated-image-button',
+      '[hide-from-message-actions]',
+      '[overlay][hide-from-message-actions]'
+    ].join(',');
+    root.querySelectorAll(selector).forEach((node) => node.remove());
+  }
+
+  function replaceInteractiveImageContainers(root) {
+    const containers = Array.from(root.querySelectorAll('button, [role="button"]'));
+    containers.forEach((container) => {
+      if (!container.parentNode || !nodeHasExportableImages(container)) {
+        return;
+      }
+      replaceNodeWithExportableImages(container);
+    });
+  }
+
+  function replaceNodeWithExportableImages(node) {
+    if (!node || !node.parentNode) {
+      return false;
+    }
+    const images = collectExportableImageElements(node);
+    if (!images.length) {
+      return false;
+    }
+    const fragment = document.createDocumentFragment();
+    images.forEach((image) => {
+      const figure = buildExportImageFigure(image);
+      if (figure) {
+        fragment.appendChild(figure);
+      }
+    });
+    if (!fragment.childNodes.length) {
+      return false;
+    }
+    node.parentNode.replaceChild(fragment, node);
+    return true;
+  }
+
+  function wrapLooseExportableImages(root) {
+    const images = collectExportableImageElements(root);
+    images.forEach((image) => {
+      if (!image.parentNode || image.closest('.omni-exporter-exported-image')) {
+        return;
+      }
+      const figure = buildExportImageFigure(image);
+      if (!figure) {
+        return;
+      }
+      image.parentNode.replaceChild(figure, image);
+    });
+  }
+
+  function collectExportableImageElements(root) {
+    if (!root) {
+      return [];
+    }
+    const images = [];
+    if (root.matches && root.matches('img')) {
+      images.push(root);
+    }
+    if (root.querySelectorAll) {
+      images.push(...root.querySelectorAll('img'));
+    }
+    const seen = new Set();
+    return images.filter((image) => {
+      if (!isExportableImageElement(image)) {
+        return false;
+      }
+      const key = normalizeImageSource(image);
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function nodeHasExportableImages(node) {
+    return collectExportableImageElements(node).length > 0;
+  }
+
+  function isExportableImageElement(image) {
+    if (!image || !image.getAttribute) {
+      return false;
+    }
+    const src = normalizeImageSource(image);
+    if (!src || /^data:image\/svg\+xml/i.test(src)) {
+      return false;
+    }
+    if (image.closest && image.closest('nav, header, footer, menu, .omni-exporter-btn')) {
+      return false;
+    }
+    const alt = normalizeText(ensureString(image.getAttribute('alt')).replace(/\u00a0/g, ' '));
+    const className = ensureString(image.className);
+    const width = Number(image.getAttribute('width')) || Number(image.naturalWidth) || 0;
+    const height = Number(image.getAttribute('height')) || Number(image.naturalHeight) || 0;
+    const generatedContext = image.closest && image.closest(
+      '.attachment-container, .generated-images, generated-image, single-image, .image-container, ' +
+      '.file-preview-container, user-query-file-preview, user-query-file-carousel, ' +
+      '[data-testid="image-gen-overlay-actions"], [id^="image-"], img[data-test-id="uploaded-img"]'
+    );
+    if (generatedContext) {
+      return true;
+    }
+    if (/image|generated|générée|généré|generated-image|loaded/i.test(`${alt} ${className}`)) {
+      return true;
+    }
+    return width >= 64 && height >= 64;
+  }
+
+  function normalizeImageSource(image) {
+    if (!image) {
+      return '';
+    }
+    return ensureString(
+      image.currentSrc ||
+      (image.getAttribute && image.getAttribute('src')) ||
+      image.src
+    ).trim();
+  }
+
+  function buildExportImageFigure(image) {
+    const src = normalizeImageSource(image);
+    if (!src) {
+      return null;
+    }
+    const figure = document.createElement('figure');
+    figure.className = 'omni-exporter-exported-image';
+
+    const clonedImage = document.createElement('img');
+    clonedImage.src = src;
+    clonedImage.alt = normalizeExportImageAlt(image.getAttribute('alt') || image.getAttribute('aria-label') || '');
+    clonedImage.loading = 'eager';
+    clonedImage.decoding = 'sync';
+
+    const width = Number(image.getAttribute('width')) || Number(image.naturalWidth) || 0;
+    const height = Number(image.getAttribute('height')) || Number(image.naturalHeight) || 0;
+    if (width > 0) {
+      clonedImage.setAttribute('width', String(Math.round(width)));
+    }
+    if (height > 0) {
+      clonedImage.setAttribute('height', String(Math.round(height)));
+    }
+
+    figure.appendChild(clonedImage);
+
+    const caption = normalizeExportImageCaption(clonedImage.alt);
+    if (caption) {
+      const figcaption = document.createElement('figcaption');
+      figcaption.textContent = caption;
+      figure.appendChild(figcaption);
+    }
+
+    return figure;
+  }
+
+  function normalizeExportImageAlt(value) {
+    return normalizeText(ensureString(value).replace(/\u00a0/g, ' '))
+      .replace(/^,\s*/, '')
+      .trim();
+  }
+
+  function normalizeExportImageCaption(value) {
+    const caption = normalizeExportImageAlt(value);
+    if (!caption || caption.length < 8) {
+      return '';
+    }
+    if (/^(g[eé]n[eé]r[eé] par ia|generated by ai|image generated|image g[eé]n[eé]r[eé]e?)$/i.test(caption)) {
+      return '';
+    }
+    return caption;
   }
 
   function normalizeGrokStrokeWidthInlineSpan(root) {
@@ -3080,125 +4014,122 @@ Licenses:
     if (!root) {
       return { text: '', html: '' };
     }
-
-    let selectors;
-    if (platform === 'deepseek') {
-      selectors = [
-        '.ds-markdown',
-        '.fbb737a4',
-        '._72b6158',
-        '.markdown',
-        '.prose',
-        '.whitespace-pre-wrap',
-        '[data-message-content]',
-        '[data-testid*="message-content"]'
-      ];
-    } else if (platform === 'claude') {
-      selectors = [
-        '[data-testid="assistant-message"]',
-        '[data-testid="user-message"]',
-        '.font-claude-response-body',
-        '.font-claude-response',
-        '.standard-markdown',
-        '.progressive-markdown',
-        '.markdown',
-        '.prose',
-        '.whitespace-pre-wrap'
-      ];
-    } else if (platform === 'gemini') {
-      const GEMINI_LEAF_SELECTOR =
-        'message-content, .markdown, ' +
-        '.query-text, .query-content, .user-query-bubble-with-background';
-      if (root.matches && root.matches(GEMINI_LEAF_SELECTOR)) {
-        const preferredLeaf =
-          (root.matches && root.matches('.markdown, .query-text, .user-query-bubble-with-background') ? root : null) ||
-          (root.querySelector && root.querySelector('.markdown, .query-text, .user-query-bubble-with-background')) ||
-          root;
-        const exportNode = prepareNodeForExport(preferredLeaf);
-        const text = normalizeText(exportNode.innerText || '');
-        if (text) {
-          return {
-            text,
-            html: cleanHtml(exportNode),
-            sourceNode: preferredLeaf
-          };
-        }
-      }
-      selectors = [
-        'message-content .markdown',
-        'model-response message-content .markdown',
-        'user-query-content .query-content .query-text',
-        'user-query .query-text',
-        '.query-content .query-text',
-        '.query-text',
-        '.user-query-bubble-with-background',
-        'model-response message-content',
-        'user-query-content .query-content'
-      ];
-    } else if (platform === 'grok') {
-      const content = root.querySelector('.message-content, .message-row');
-      if (content) {
-        const exportContent = prepareNodeForExport(content);
-        return {
-          text: normalizeText(exportContent.innerText || ''),
-          html: cleanHtml(exportContent)
-        };
-      }
-      selectors = [
-        '.response-content-markdown',
-        '.message-bubble',
-        '.markdown',
-        '.prose',
-        '.whitespace-pre-wrap',
-        '[data-message-content]',
-        '[data-testid*="message-content"]'
-      ];
-    } else {
-      selectors = [
-        '.markdown',
-        '.prose',
-        '.whitespace-pre-wrap',
-        '[data-message-content]',
-        '[data-testid*="message-content"]'
-      ];
+    const immediateContent = extractImmediatePlatformContent(root);
+    if (immediateContent) {
+      return immediateContent;
     }
+
+    const selectors = getMessageContentSelectors();
     const allNodes = Array.from(root.querySelectorAll(selectors.join(',')));
+    const nodes = filterMessageContentNodes(allNodes);
+    const collectedContent = collectMessageContentFromNodes(nodes);
+    if (collectedContent) {
+      return collectedContent;
+    }
 
-    const nodes = allNodes.filter((node, index, self) => {
+    return buildFallbackMessageContent(root);
+  }
+
+  function extractImmediatePlatformContent(root) {
+    if (platform === 'gemini') {
+      return extractImmediateGeminiContent(root);
+    }
+    if (platform === 'grok') {
+      return extractImmediateGrokContent(root);
+    }
+    return null;
+  }
+
+  function extractImmediateGeminiContent(root) {
+    const GEMINI_LEAF_SELECTOR =
+      'message-content, .markdown, ' +
+      '.query-text, .query-content, .user-query-bubble-with-background';
+    if (!root.matches || !root.matches(GEMINI_LEAF_SELECTOR)) {
+      return null;
+    }
+    const preferredLeaf =
+      (root.matches('.markdown, .query-text, .user-query-bubble-with-background') ? root : null) ||
+      (root.querySelector && root.querySelector('.markdown, .query-text, .user-query-bubble-with-background')) ||
+      root;
+    return buildMessageContentFromNode(preferredLeaf, true);
+  }
+
+  function extractImmediateGrokContent(root) {
+    const content = root.querySelector('.message-content, .message-row');
+    if (!content) {
+      return null;
+    }
+    return buildMessageContentFromNode(content, false);
+  }
+
+  function getMessageContentSelectors() {
+    if (platform === 'deepseek') {
+      return ['.ds-markdown', '.fbb737a4', '._72b6158', '.markdown', '.prose', '.whitespace-pre-wrap', '[data-message-content]', '[data-testid*="message-content"]'];
+    }
+    if (platform === 'claude') {
+      return ['[data-testid="assistant-message"]', '[data-testid="user-message"]', '.font-claude-response-body', '.font-claude-response', '.standard-markdown', '.progressive-markdown', '.markdown', '.prose', '.whitespace-pre-wrap'];
+    }
+    if (platform === 'gemini') {
+      return ['message-content .markdown', 'model-response message-content .markdown', 'user-query-content .query-content .query-text', 'user-query .query-text', '.query-content .query-text', '.query-text', '.user-query-bubble-with-background', 'model-response message-content', 'user-query-content .query-content'];
+    }
+    if (platform === 'grok') {
+      return ['.response-content-markdown', '.message-bubble', '.markdown', '.prose', '.whitespace-pre-wrap', '[data-message-content]', '[data-testid*="message-content"]'];
+    }
+    return ['.markdown', '.prose', '.whitespace-pre-wrap', '[data-message-content]', '[data-testid*="message-content"]'];
+  }
+
+  function filterMessageContentNodes(nodes) {
+    return nodes.filter((node, index, self) => {
       if (platform === 'gemini') {
-        const containsOther = self.some((other) => other !== node && node.contains(other));
-        return !containsOther;
+        return !self.some((other) => other !== node && node.contains(other));
       }
-      const isContained = self.some((other) => other !== node && other.contains(node));
-      return !isContained;
+      return !self.some((other) => other !== node && other.contains(node));
     });
+  }
 
+  function collectMessageContentFromNodes(nodes) {
     const parts = [];
     const htmlParts = [];
     const sourceNodes = [];
-
-    nodes.forEach((node) => {
-      if (node.closest('button, nav, header, footer, svg')) {
-        return;
-      }
-      const exportNode = prepareNodeForExport(node);
-      const text = normalizeText(exportNode.innerText || '');
-      const html = cleanHtml(exportNode);
-      if (text) {
-        parts.push(text);
-        htmlParts.push(html);
-        sourceNodes.push(node);
-      }
-    });
-
-    if (parts.length) {
-      return {
-        text: parts.join('\n\n').trim(),
-        html: htmlParts.join('<br><br>').trim(),
-        sourceNode: sourceNodes.length === 1 ? sourceNodes[0] : null
-      };
+    nodes.forEach((node) => appendMessageContentPart(node, parts, htmlParts, sourceNodes));
+    if (!parts.length) {
+      return null;
     }
+    return {
+      text: parts.join('\n\n').trim(),
+      html: htmlParts.join('<br><br>').trim(),
+      sourceNode: sourceNodes.length === 1 ? sourceNodes[0] : null
+    };
+  }
 
+  function appendMessageContentPart(node, parts, htmlParts, sourceNodes) {
+    if (node.closest('button, nav, header, footer, svg')) {
+      return;
+    }
+    const content = buildMessageContentFromNode(node, false);
+    if (!hasCollectedContent(content)) {
+      return;
+    }
+    parts.push(content.text);
+    htmlParts.push(content.html);
+    sourceNodes.push(node);
+  }
+
+  function buildMessageContentFromNode(node, includeSourceNode) {
+    const exportNode = prepareNodeForExport(node);
+    const text = normalizeText(exportNode.innerText || '');
+    const html = cleanHtml(exportNode);
+    if (!text && !htmlHasExportableImages(html)) {
+      return null;
+    }
+    const content = { text, html };
+    if (includeSourceNode) {
+      content.sourceNode = node;
+    }
+    return content;
+  }
+
+  function buildFallbackMessageContent(root) {
     const fallbackNode = prepareNodeForExport(root);
     const fallbackText = normalizeText(fallbackNode.innerText || '');
     const fallbackHtml = cleanHtml(fallbackNode);
@@ -3388,6 +4319,18 @@ Licenses:
     }
 
     const tag = ensureString(node.tagName).toLowerCase();
+    const mathResult = renderMarkdownMathNode(node, tag);
+    if (mathResult !== null) {
+      return mathResult;
+    }
+    const tagResult = renderMarkdownElementByTag(node, ctx, tag);
+    if (tagResult !== null) {
+      return tagResult;
+    }
+    return renderMarkdownDefaultElement(node, ctx, tag);
+  }
+
+  function renderMarkdownMathNode(node, tag) {
     const katexMode = detectKatexMode(node);
     if (katexMode === 'display') {
       const tex = extractLatexFromNode(node);
@@ -3400,80 +4343,105 @@ Licenses:
     if (tag === 'annotation' && ensureString(node.getAttribute('encoding')).toLowerCase() === 'application/x-tex') {
       return '';
     }
+    return null;
+  }
 
-    if (tag === 'br') {
-      return '\n';
+  function renderMarkdownElementByTag(node, ctx, tag) {
+    const simple = renderMarkdownSimpleElement(node, ctx, tag);
+    if (simple !== null) {
+      return simple;
     }
-    if (tag === 'hr') {
-      return '\n\n---\n\n';
+    const block = renderMarkdownBlockElement(node, ctx, tag);
+    if (block !== null) {
+      return block;
     }
-    if (tag === 'pre') {
-      return renderMarkdownCodeBlock(node);
+    return renderMarkdownInlineElement(node, ctx, tag);
+  }
+
+  function renderMarkdownSimpleElement(node, ctx, tag) {
+    const simpleRenderers = {
+      br: () => '\n',
+      hr: () => '\n\n---\n\n',
+      pre: () => renderMarkdownCodeBlock(node),
+      table: () => renderMarkdownTable(node, ctx),
+      ul: () => renderMarkdownList(node, false, ctx),
+      ol: () => renderMarkdownList(node, true, ctx),
+      li: () => renderMarkdownListItem(node, ctx, '-')
+    };
+    if (Object.prototype.hasOwnProperty.call(simpleRenderers, tag)) {
+      return simpleRenderers[tag]();
     }
     if (tag === 'code') {
-      if (node.closest('pre')) {
-        return '';
-      }
-      return wrapMarkdownInlineCode(node.textContent || '');
+      return node.closest('pre') ? '' : wrapMarkdownInlineCode(node.textContent || '');
     }
-    if (tag === 'table') {
-      return renderMarkdownTable(node, ctx);
-    }
+    return null;
+  }
+
+  function renderMarkdownBlockElement(node, ctx, tag) {
     if (tag === 'blockquote') {
-      const quoteBody = finalizeMarkdownOutput(renderMarkdownChildren(node, ctx));
-      if (!quoteBody) {
-        return '';
-      }
-      const quotedLines = quoteBody.split('\n').map((line) => line ? `> ${line}` : '>');
-      return `\n\n${quotedLines.join('\n')}\n\n`;
+      return renderMarkdownBlockQuote(node, ctx);
     }
-    if (tag === 'ul' || tag === 'ol') {
-      return renderMarkdownList(node, tag === 'ol', ctx);
-    }
-    if (tag === 'li') {
-      return renderMarkdownListItem(node, ctx, '-');
-    }
-    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
-      const level = Number.parseInt(tag.slice(1), 10) || 1;
-      const heading = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
-      if (!heading) {
-        return '';
-      }
-      return `\n\n${'#'.repeat(Math.max(1, Math.min(6, level)))} ${heading}\n\n`;
+    if (/^h[1-6]$/.test(tag)) {
+      return renderMarkdownHeading(node, ctx, tag);
     }
     if (tag === 'p') {
       const paragraph = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
       return paragraph ? `\n\n${paragraph}\n\n` : '';
     }
+    return null;
+  }
+
+  function renderMarkdownBlockQuote(node, ctx) {
+    const quoteBody = finalizeMarkdownOutput(renderMarkdownChildren(node, ctx));
+    if (!quoteBody) {
+      return '';
+    }
+    const quotedLines = quoteBody.split('\n').map((line) => line ? `> ${line}` : '>');
+    return `\n\n${quotedLines.join('\n')}\n\n`;
+  }
+
+  function renderMarkdownHeading(node, ctx, tag) {
+    const level = Number.parseInt(tag.slice(1), 10) || 1;
+    const heading = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
+    if (!heading) {
+      return '';
+    }
+    return `\n\n${'#'.repeat(Math.max(1, Math.min(6, level)))} ${heading}\n\n`;
+  }
+
+  function renderMarkdownInlineElement(node, ctx, tag) {
+    const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
     if (tag === 'strong' || tag === 'b') {
-      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
       return content ? `**${content}**` : '';
     }
     if (tag === 'em' || tag === 'i') {
-      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
       return content ? `*${content}*` : '';
     }
     if (tag === 'del' || tag === 's' || tag === 'strike') {
-      const content = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx));
       return content ? `~~${content}~~` : '';
     }
     if (tag === 'a') {
-      const href = ensureString(node.getAttribute('href')).trim();
-      const label = normalizeInlineMarkdownChunk(renderMarkdownChildren(node, ctx)) || href;
-      if (!href) {
-        return label;
-      }
-      return `[${label}](${href})`;
+      return renderMarkdownLink(node, content);
     }
     if (tag === 'img') {
-      const alt = escapeMarkdownText(ensureString(node.getAttribute('alt')).trim());
-      const src = ensureString(node.getAttribute('src')).trim();
-      if (!src) {
-        return alt;
-      }
-      return `![${alt}](${src})`;
+      return renderMarkdownImage(node);
     }
+    return null;
+  }
 
+  function renderMarkdownLink(node, content) {
+    const href = ensureString(node.getAttribute('href')).trim();
+    const label = content || href;
+    return href ? `[${label}](${href})` : label;
+  }
+
+  function renderMarkdownImage(node) {
+    const alt = escapeMarkdownText(ensureString(node.getAttribute('alt')).trim());
+    const src = ensureString(node.getAttribute('src')).trim();
+    return src ? `![${alt}](${src})` : alt;
+  }
+
+  function renderMarkdownDefaultElement(node, ctx, tag) {
     const inner = renderMarkdownChildren(node, ctx);
     if (isMarkdownBlockTag(tag)) {
       const block = finalizeMarkdownOutput(inner);
@@ -3869,34 +4837,6 @@ Licenses:
       return { text: formatPdfTextWithEmoji(htmlOrText), preserveLeadingSpaces: true };
     }
 
-    if (document && document.body) {
-      const mount = document.createElement('div');
-      mount.setAttribute('data-omni-pdf-parse', 'true');
-      mount.style.position = 'fixed';
-      mount.style.left = '-100000px';
-      mount.style.top = '-100000px';
-      mount.style.width = '1px';
-      mount.style.height = '1px';
-      mount.style.opacity = '0';
-      mount.style.pointerEvents = 'none';
-      mount.style.overflow = 'hidden';
-      try {
-        mount.innerHTML = htmlOrText;
-        stripNonExportableNodes(mount);
-        document.body.appendChild(mount);
-        const liveResult = parseNodeToPdfMake(mount);
-        if (Array.isArray(liveResult) && liveResult.length === 1) {
-          return liveResult[0];
-        }
-        return liveResult;
-      } catch (err) {
-      } finally {
-        if (mount.parentNode) {
-          mount.parentNode.removeChild(mount);
-        }
-      }
-    }
-
     const temp = parseHtmlContainer(htmlOrText);
     if (!temp) {
       return {
@@ -3919,10 +4859,15 @@ Licenses:
     if (!raw) {
       return null;
     }
+    const trustedHtml = createTrustedHtmlValue(raw);
+    if (requiresTrustedHtmlValue() && !trustedHtml) {
+      return null;
+    }
+    const htmlValue = trustedHtml || raw;
     if (typeof DOMParser !== 'undefined') {
       try {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(raw, 'text/html');
+        const doc = parser.parseFromString(htmlValue, 'text/html');
         if (doc && doc.body) {
           return doc.body;
         }
@@ -3931,11 +4876,53 @@ Licenses:
     }
     const temp = document.createElement('div');
     try {
-      temp.innerHTML = raw;
+      temp.innerHTML = htmlValue;
       return temp;
     } catch (err) {
       return null;
     }
+  }
+
+  function requiresTrustedHtmlValue() {
+    return typeof window !== 'undefined' &&
+      window.trustedTypes &&
+      typeof window.trustedTypes.createPolicy === 'function';
+  }
+
+  function createTrustedHtmlValue(value) {
+    if (!requiresTrustedHtmlValue()) {
+      return null;
+    }
+    if (trustedHtmlPolicyUnavailable) {
+      return null;
+    }
+    try {
+      if (!trustedHtmlPolicyRef) {
+        trustedHtmlPolicyRef = createTrustedHtmlPolicy();
+      }
+      return trustedHtmlPolicyRef ? trustedHtmlPolicyRef.createHTML(ensureString(value)) : null;
+    } catch (err) {
+      trustedHtmlPolicyUnavailable = true;
+      return null;
+    }
+  }
+
+  function createTrustedHtmlPolicy() {
+    const factory = window.trustedTypes;
+    const policyOptions = {
+      createHTML: (input) => input
+    };
+    const names = [
+      'omniChatExporter',
+      `omniChatExporter${Date.now()}${Math.round(Math.random() * 100000)}`
+    ];
+    for (const name of names) {
+      try {
+        return factory.createPolicy(name, policyOptions);
+      } catch (err) {
+      }
+    }
+    return null;
   }
 
   function stripHtmlToText(html) {
@@ -3987,180 +4974,247 @@ Licenses:
 
   function parseNodeRecursive(node) {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent;
-      if (!text) {
-        return null;
-      }
-
-      const normalized = text.replace(/\s*\n+\s*/g, ' ');
-      if (normalized.trim() === '' && normalized.length > 0) {
-        return { text: normalized };
-      }
-      if (!normalized.trim()) {
-        return null;
-      }
-      return { text: formatPdfTextWithEmoji(normalized) };
+      return parsePdfTextNode(node);
     }
-
     if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
-        return null;
-      }
-
-      const specialCodeBlock = buildSpecialPdfCodeBlock(node);
-      if (specialCodeBlock) {
-        return specialCodeBlock;
-      }
-      if (isGrokInlineCodeLikeElement(node)) {
-        return buildInlineCodeTextStyle(node.textContent || '', { noWrap: false });
-      }
-
-      const tagName = node.tagName.toLowerCase();
-      const children = Array.from(node.childNodes);
-
-      const childContent = [];
-      children.forEach(child => {
-        const parsed = parseNodeRecursive(child);
-        if (parsed) {
-          if (Array.isArray(parsed)) {
-            childContent.push(...parsed);
-          } else {
-            childContent.push(parsed);
-          }
-        }
-      });
-
-      switch (tagName) {
-        case 'strong':
-        case 'b':
-          return childContent.map(c => ({ ...c, bold: true }));
-
-        case 'em':
-        case 'i':
-          return childContent.map(c => ({ ...c, italics: true }));
-
-        case 'u':
-          return childContent.map(c => ({ ...c, decoration: 'underline' }));
-
-        case 'a': {
-          const href = node.getAttribute('href') || '';
-          return childContent.map(c => ({
-            ...c,
-            link: href,
-            color: '#2563eb',
-            decoration: 'underline'
-          }));
-        }
-
-        case 'code': {
-          return buildInlineCodeTextStyle(node.textContent || '');
-        }
-
-        case 'pre': {
-          const codeNode = node.querySelector('code');
-          const text = (codeNode || node).textContent || '';
-          return {
-            text: formatPdfTextWithEmoji(text),
-            font: 'monospace',
-            fontSize: 9,
-            background: '#f6f8fa',
-            margin: [0, 6, 0, 6],
-            preserveLeadingSpaces: true
-          };
-        }
-
-        case 'h1':
-          return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: 18, bold: true, margin: [0, 12, 0, 6] }];
-        case 'h2':
-          return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: 16, bold: true, margin: [0, 10, 0, 5] }];
-        case 'h3':
-          return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: 14, bold: true, margin: [0, 8, 0, 4] }];
-        case 'h4':
-          return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: 12, bold: true, margin: [0, 6, 0, 3] }];
-        case 'h5':
-        case 'h6':
-          return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: 11, bold: true, margin: [0, 4, 0, 2] }];
-        case 'hr':
-          return [{
-            canvas: [
-              { type: 'line', x1: 0, y1: 0, x2: 505, y2: 0, lineWidth: 0.5, lineColor: '#cbd5e1' }
-            ],
-            margin: [0, 6, 0, 8]
-          }];
-        case 'table': {
-          const table = buildPdfTableFromHtmlTable(node);
-          return table || null;
-        }
-
-        case 'ul': {
-          return buildStructuredPdfList(node, false);
-        }
-
-        case 'ol': {
-          return buildStructuredPdfList(node, true);
-        }
-
-        case 'li':
-          return buildListItemPdfContent(childContent, node.textContent || '');
-
-        case 'p':
-          return withParagraphBreak(childContent, node.textContent || '');
-
-        case 'blockquote': {
-
-          const unwrappedForQuote = childContent.flatMap((part) => {
-            if (
-              part &&
-              typeof part === 'object' &&
-              Array.isArray(part.stack) &&
-              !Object.prototype.hasOwnProperty.call(part, 'ul') &&
-              !Object.prototype.hasOwnProperty.call(part, 'ol') &&
-              !Object.prototype.hasOwnProperty.call(part, 'image') &&
-              !Object.prototype.hasOwnProperty.call(part, 'table')
-            ) {
-              return part.stack;
-            }
-            return [part];
-          });
-          const quoteContent = composeMixedPdfStack(unwrappedForQuote, node.textContent || '');
-          return {
-            table: {
-              widths: [0.01, '*'],
-              body: [[
-                { text: '', fillColor: '#e5e7eb', border: [false, false, false, false] },
-                {
-                  stack: quoteContent,
-                  fillColor: '#f9fafb',
-                  color: '#475569',
-                  border: [false, false, false, false]
-                }
-              ]]
-            },
-            layout: {
-              hLineWidth: () => 0,
-              vLineWidth: () => 0,
-              paddingLeft: (i) => (i === 0 ? 0 : 8),
-              paddingRight: () => 8,
-              paddingTop: () => 4,
-              paddingBottom: () => 4
-            },
-            margin: [6, 2, 0, 6]
-          };
-        }
-
-        case 'br':
-          return { text: '\n', preserveLeadingSpaces: true };
-
-        case 'div':
-        case 'span':
-          return childContent;
-
-        default:
-          return childContent;
-      }
+      return parsePdfElementNode(node);
     }
-
     return null;
+  }
+
+  function parsePdfTextNode(node) {
+    const text = node.textContent;
+    if (!text) {
+      return null;
+    }
+    const normalized = text.replace(/\s*\n+\s*/g, ' ');
+    if (normalized.trim() === '' && normalized.length > 0) {
+      return { text: normalized };
+    }
+    return normalized.trim() ? { text: formatPdfTextWithEmoji(normalized) } : null;
+  }
+
+  function parsePdfElementNode(node) {
+    if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
+      return null;
+    }
+    const specialCodeBlock = buildSpecialPdfCodeBlock(node);
+    if (specialCodeBlock) {
+      return specialCodeBlock;
+    }
+    if (isGrokInlineCodeLikeElement(node)) {
+      return buildInlineCodeTextStyle(node.textContent || '', { noWrap: false });
+    }
+    const tagName = node.tagName.toLowerCase();
+    const childContent = parsePdfChildContent(node);
+    return parsePdfElementByTag(node, tagName, childContent);
+  }
+
+  function parsePdfChildContent(node) {
+    const childContent = [];
+    Array.from(node.childNodes).forEach((child) => {
+      if (isDeepSeekScrollChromeNode(child)) {
+        return;
+      }
+      const parsed = parseNodeRecursive(child);
+      if (Array.isArray(parsed)) {
+        childContent.push(...parsed);
+      } else if (parsed) {
+        childContent.push(parsed);
+      }
+    });
+    return childContent;
+  }
+
+  function parsePdfElementByTag(node, tagName, childContent) {
+    const inlineStyle = parsePdfInlineStyleElement(node, tagName, childContent);
+    if (inlineStyle) {
+      return inlineStyle;
+    }
+    const blockStyle = parsePdfBlockElement(node, tagName, childContent);
+    if (blockStyle !== undefined) {
+      return blockStyle;
+    }
+    return childContent;
+  }
+
+  function parsePdfInlineStyleElement(node, tagName, childContent) {
+    if (tagName === 'strong' || tagName === 'b') {
+      return childContent.map(c => ({ ...c, bold: true }));
+    }
+    if (tagName === 'em' || tagName === 'i') {
+      return childContent.map(c => ({ ...c, italics: true }));
+    }
+    if (tagName === 'u') {
+      return childContent.map(c => ({ ...c, decoration: 'underline' }));
+    }
+    if (tagName === 'a') {
+      const href = node.getAttribute('href') || '';
+      return childContent.map(c => ({ ...c, link: href, color: '#2563eb', decoration: 'underline' }));
+    }
+    if (tagName === 'code') {
+      return buildInlineCodeTextStyle(node.textContent || '');
+    }
+    return null;
+  }
+
+  function parsePdfBlockElement(node, tagName, childContent) {
+    if (tagName === 'pre') {
+      return buildPdfPreBlock(node);
+    }
+    if (/^h[1-6]$/.test(tagName)) {
+      return buildPdfHeading(node, tagName);
+    }
+    if (tagName === 'hr') {
+      return buildPdfHorizontalRule();
+    }
+    if (tagName === 'table') {
+      return buildPdfTableFromHtmlTable(node) || null;
+    }
+    if (tagName === 'ul' || tagName === 'ol') {
+      return buildStructuredPdfList(node, tagName === 'ol');
+    }
+    if (tagName === 'li') {
+      return buildListItemPdfContent(childContent, node.textContent || '');
+    }
+    if (tagName === 'p') {
+      return withParagraphContent(childContent, node.textContent || '');
+    }
+    return parsePdfMediaOrContainerElement(node, tagName, childContent);
+  }
+
+  function buildPdfPreBlock(node) {
+    const codeNode = node.querySelector('code');
+    const text = (codeNode || node).textContent || '';
+    return {
+      text: formatPdfTextWithEmoji(text),
+      font: 'monospace',
+      fontSize: 9,
+      background: '#f6f8fa',
+      margin: [0, 6, 0, 6],
+      preserveLeadingSpaces: true
+    };
+  }
+
+  function buildPdfHeading(node, tagName) {
+    const headingStyles = {
+      h1: [18, [0, 12, 0, 6]],
+      h2: [16, [0, 10, 0, 5]],
+      h3: [14, [0, 8, 0, 4]],
+      h4: [12, [0, 6, 0, 3]],
+      h5: [11, [0, 4, 0, 2]],
+      h6: [11, [0, 4, 0, 2]]
+    };
+    const style = headingStyles[tagName] || headingStyles.h6;
+    return [{ text: formatPdfTextWithEmoji(node.textContent || ''), fontSize: style[0], bold: true, margin: style[1] }];
+  }
+
+  function buildPdfHorizontalRule() {
+    return [{
+      canvas: [
+        { type: 'line', x1: 0, y1: 0, x2: 505, y2: 0, lineWidth: 0.5, lineColor: '#cbd5e1' }
+      ],
+      margin: [0, 6, 0, 8]
+    }];
+  }
+
+  function parsePdfMediaOrContainerElement(node, tagName, childContent) {
+    if (tagName === 'blockquote') {
+      return buildPdfBlockQuote(node, childContent);
+    }
+    if (tagName === 'br') {
+      return { text: '\n', preserveLeadingSpaces: true };
+    }
+    if (tagName === 'img') {
+      return buildPdfImageNode(node);
+    }
+    if (tagName === 'figure') {
+      return buildPdfFigure(childContent);
+    }
+    if (tagName === 'figcaption') {
+      return buildPdfFigureCaption(node);
+    }
+    if (tagName === 'div' || tagName === 'span') {
+      return childContent;
+    }
+    return undefined;
+  }
+
+  function buildPdfBlockQuote(node, childContent) {
+    const unwrappedForQuote = childContent.flatMap((part) => {
+      if (isPlainPdfStack(part)) {
+        return part.stack;
+      }
+      return [part];
+    });
+    const quoteContent = composeMixedPdfStack(unwrappedForQuote, node.textContent || '');
+    return {
+      table: {
+        widths: [0.01, '*'],
+        body: [[
+          { text: '', fillColor: '#e5e7eb', border: [false, false, false, false] },
+          {
+            stack: quoteContent,
+            fillColor: '#f9fafb',
+            color: '#475569',
+            border: [false, false, false, false]
+          }
+        ]]
+      },
+      layout: {
+        hLineWidth: () => 0,
+        vLineWidth: () => 0,
+        paddingLeft: (i) => (i === 0 ? 0 : 8),
+        paddingRight: () => 8,
+        paddingTop: () => 4,
+        paddingBottom: () => 4
+      },
+      margin: [6, 2, 0, 6]
+    };
+  }
+
+  function isPlainPdfStack(part) {
+    return part &&
+      typeof part === 'object' &&
+      Array.isArray(part.stack) &&
+      !Object.prototype.hasOwnProperty.call(part, 'ul') &&
+      !Object.prototype.hasOwnProperty.call(part, 'ol') &&
+      !Object.prototype.hasOwnProperty.call(part, 'image') &&
+      !Object.prototype.hasOwnProperty.call(part, 'table');
+  }
+
+  function buildPdfFigure(childContent) {
+    const figureStack = flattenPdfParts(childContent).filter(Boolean);
+    if (!figureStack.length) {
+      return null;
+    }
+    return {
+      stack: figureStack,
+      margin: [0, 6, 0, 10],
+      unbreakable: true
+    };
+  }
+
+  function buildPdfFigureCaption(node) {
+    const caption = normalizeText(node.textContent || '');
+    if (!caption) {
+      return null;
+    }
+    return {
+      text: formatPdfTextWithEmoji(caption),
+      fontSize: 8,
+      color: '#64748b',
+      italics: true,
+      alignment: 'center',
+      margin: [0, -2, 0, 4]
+    };
+  }
+
+  function isDeepSeekScrollChromeNode(node) {
+    if (platform !== 'deepseek' || !node || node.nodeType !== Node.ELEMENT_NODE || !node.matches) {
+      return false;
+    }
+    return node.matches('.ds-scroll-area__gutters, .ds-scroll-area__horizontal-gutter, .ds-scroll-area__vertical-gutter, .ds-scroll-area__horizontal-bar, .ds-scroll-area__vertical-bar');
   }
 
   function isGrokInlineCodeLikeElement(node) {
@@ -4174,6 +5228,32 @@ Licenses:
       (className.includes('bg-orange-400/10') || className.includes('dark:bg-orange-300/10')) &&
       (className.includes('text-orange-500') || className.includes('dark:text-orange-300'))
     );
+  }
+
+  function buildPdfImageNode(node) {
+    const src = normalizeImageSource(node);
+    if (!src || !/^data:image\/(?:png|jpe?g);/i.test(src)) {
+      return null;
+    }
+    const width = Number(node.getAttribute('width')) || Number(node.naturalWidth) || 0;
+    const height = Number(node.getAttribute('height')) || Number(node.naturalHeight) || 0;
+    const maxWidth = 430;
+    const maxHeight = 360;
+    const imageNode = {
+      image: src,
+      fit: [maxWidth, maxHeight],
+      alignment: 'center',
+      margin: [0, 4, 0, 6]
+    };
+    if (width > 0 && height > 0) {
+      const ratio = width / height;
+      if (ratio > 0 && ratio < 0.75) {
+        imageNode.fit = [320, maxHeight];
+      } else if (ratio > 1.65) {
+        imageNode.fit = [maxWidth, 260];
+      }
+    }
+    return imageNode;
   }
 
   function buildInlineCodeTextStyle(text, options) {
@@ -4199,6 +5279,19 @@ Licenses:
     const inline = forceInlinePdfText(parts, fallbackText);
     return {
       stack: [inline],
+      margin: [0, 0, 0, 6]
+    };
+  }
+
+  function withParagraphContent(parts, fallbackText) {
+    const flattened = flattenPdfParts(parts).filter(Boolean);
+    const hasBlockChildren = flattened.some((part) => !isInlinePdfTextPart(part));
+    if (!hasBlockChildren) {
+      return withParagraphBreak(flattened, fallbackText);
+    }
+    const stack = composeMixedPdfStack(flattened, fallbackText);
+    return {
+      stack: stack.length ? stack : [{ text: '' }],
       margin: [0, 0, 0, 6]
     };
   }
@@ -4405,14 +5498,7 @@ Licenses:
       return;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || '';
-      if (!text) {
-        return;
-      }
-      out.push({
-        text: text,
-        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
-      });
+      appendChatGptCodeTextInline(node, inheritedColor, out);
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -4420,42 +5506,60 @@ Licenses:
     }
 
     const tagName = (node.tagName || '').toLowerCase();
-    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
-    if (tagName === 'span') {
-      const computedColor = normalizePdfColorValue(
-        ensureString(window.getComputedStyle(node).color)
-      );
-      if (computedColor) {
-        nextColor = computedColor;
-      }
-    }
+    const nextColor = resolveChatGptCodeInlineColor(node, tagName, inheritedColor);
 
     if (tagName === 'br') {
-      out.push({
-        text: '\n',
-        color: nextColor
-      });
+      out.push({ text: '\n', color: nextColor });
       return;
     }
 
-    if (tagName === 'div' && node.classList && node.classList.contains('cm-content')) {
-      const cmLines = Array.from(node.children || []).filter((child) => {
-        return child && child.classList && child.classList.contains('cm-line');
-      });
-      if (cmLines.length) {
-        cmLines.forEach((lineNode, index) => {
-          appendChatGptCodeInlinesFromNode(lineNode, nextColor, out);
-          if (index < cmLines.length - 1) {
-            out.push({ text: '\n', color: nextColor });
-          }
-        });
-        return;
-      }
+    if (appendChatGptCmLines(node, tagName, nextColor, out)) {
+      return;
     }
 
     Array.from(node.childNodes || []).forEach((child) => {
       appendChatGptCodeInlinesFromNode(child, nextColor, out);
     });
+  }
+
+  function appendChatGptCodeTextInline(node, inheritedColor, out) {
+    const text = node.textContent || '';
+    if (!text) {
+      return;
+    }
+    out.push({
+      text: text,
+      color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+    });
+  }
+
+  function resolveChatGptCodeInlineColor(node, tagName, inheritedColor) {
+    const fallbackColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    if (tagName !== 'span') {
+      return fallbackColor;
+    }
+    return normalizePdfColorValue(
+      ensureString(window.getComputedStyle(node).color)
+    ) || fallbackColor;
+  }
+
+  function appendChatGptCmLines(node, tagName, nextColor, out) {
+    if (tagName !== 'div' || !node.classList || !node.classList.contains('cm-content')) {
+      return false;
+    }
+    const cmLines = Array.from(node.children || []).filter((child) => {
+      return child && child.classList && child.classList.contains('cm-line');
+    });
+    if (!cmLines.length) {
+      return false;
+    }
+    cmLines.forEach((lineNode, index) => {
+      appendChatGptCodeInlinesFromNode(lineNode, nextColor, out);
+      if (index < cmLines.length - 1) {
+        out.push({ text: '\n', color: nextColor });
+      }
+    });
+    return true;
   }
 
   function extractClaudeCodeRichInlines(node) {
@@ -4493,9 +5597,12 @@ Licenses:
       return null;
     }
 
-    const defaultColor = normalizePdfColorValue(
+    const computedDefaultColor = normalizePdfColorValue(
       ensureString(window.getComputedStyle(codeRoot).color)
-    ) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    );
+    const defaultColor = computedDefaultColor && computedDefaultColor !== '#000000'
+      ? computedDefaultColor
+      : PDF_CODE_DEFAULT_TEXT_COLOR;
     const parts = [];
     appendGeminiCodeInlinesFromNode(codeRoot, defaultColor, parts);
     const merged = mergeCodeRichInlines(parts);
@@ -4537,8 +5644,10 @@ Licenses:
       return null;
     }
     const tagName = ensureString(node.tagName).toLowerCase();
+    const deepSeekContainer = (node.closest && node.closest('.md-code-block')) || node;
     const codeRoot =
       (tagName === 'code' || tagName === 'pre' ? node : null) ||
+      querySelectorScoped(deepSeekContainer, ':scope > pre') ||
       querySelectorScoped(node, ':scope > pre > code') ||
       querySelectorScoped(node, ':scope > pre') ||
       node.querySelector('pre code') ||
@@ -4548,9 +5657,12 @@ Licenses:
       return null;
     }
 
-    const defaultColor = normalizePdfColorValue(
+    const computedDefaultColor = normalizePdfColorValue(
       ensureString(window.getComputedStyle(codeRoot).color)
-    ) || PDF_CODE_DEFAULT_TEXT_COLOR;
+    );
+    const defaultColor = computedDefaultColor && computedDefaultColor !== '#000000'
+      ? computedDefaultColor
+      : PDF_CODE_DEFAULT_TEXT_COLOR;
     const parts = [];
     const directSpanChildren = Array.from(codeRoot.childNodes || []).filter((child) => {
       return child && child.nodeType === Node.ELEMENT_NODE && ensureString(child.tagName).toLowerCase() === 'span';
@@ -4655,7 +5767,9 @@ Licenses:
       }
       out.push({
         text: text,
-        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+        color: resolveCodeInlineColor(inheritedColor),
+        bold: Boolean(inheritedColor && inheritedColor.bold),
+        italics: Boolean(inheritedColor && inheritedColor.italics)
       });
       return;
     }
@@ -4664,28 +5778,71 @@ Licenses:
     }
 
     const tagName = (node.tagName || '').toLowerCase();
-    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    let nextStyle = resolveCodeInlineStyle(inheritedColor);
     const className = ensureString(node.className);
     if (/(?:^|\s)hljs-[\w-]+(?:\s|$)/.test(className)) {
+      const tokenStyle = resolveGeminiHljsTokenStyle(className);
+      if (tokenStyle) {
+        nextStyle = Object.assign({}, nextStyle, tokenStyle);
+      }
       const computedColor = normalizePdfColorValue(
         ensureString(window.getComputedStyle(node).color)
       );
-      if (computedColor) {
-        nextColor = computedColor;
+      if (computedColor && computedColor !== '#000000') {
+        nextStyle.color = computedColor;
       }
     }
 
     if (tagName === 'br') {
       out.push({
         text: '\n',
-        color: nextColor
+        color: resolveCodeInlineColor(nextStyle),
+        bold: Boolean(nextStyle.bold),
+        italics: Boolean(nextStyle.italics)
       });
       return;
     }
 
     Array.from(node.childNodes || []).forEach((child) => {
-      appendGeminiCodeInlinesFromNode(child, nextColor, out);
+      appendGeminiCodeInlinesFromNode(child, nextStyle, out);
     });
+  }
+
+  function resolveGeminiHljsTokenStyle(className) {
+    const classes = ensureString(className).split(/\s+/).filter(Boolean);
+    for (const classEntry of classes) {
+      const match = classEntry.match(/^hljs-(.+)$/);
+      if (!match || !match[1]) {
+        continue;
+      }
+      const tokenName = match[1].replace(/-/g, '_');
+      if (PDF_GEMINI_HLJS_TOKEN_STYLES[tokenName]) {
+        return PDF_GEMINI_HLJS_TOKEN_STYLES[tokenName];
+      }
+    }
+    return null;
+  }
+
+  function resolveCodeInlineStyle(styleOrColor) {
+    if (styleOrColor && typeof styleOrColor === 'object') {
+      return {
+        color: resolveCodeInlineColor(styleOrColor),
+        bold: Boolean(styleOrColor.bold),
+        italics: Boolean(styleOrColor.italics)
+      };
+    }
+    return {
+      color: resolveCodeInlineColor(styleOrColor),
+      bold: false,
+      italics: false
+    };
+  }
+
+  function resolveCodeInlineColor(styleOrColor) {
+    if (styleOrColor && typeof styleOrColor === 'object') {
+      return styleOrColor.color || PDF_CODE_DEFAULT_TEXT_COLOR;
+    }
+    return styleOrColor || PDF_CODE_DEFAULT_TEXT_COLOR;
   }
 
   function appendDeepSeekCodeInlinesFromNode(node, inheritedColor, out) {
@@ -4699,7 +5856,9 @@ Licenses:
       }
       out.push({
         text: text,
-        color: inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR
+        color: resolveCodeInlineColor(inheritedColor),
+        bold: Boolean(inheritedColor && inheritedColor.bold),
+        italics: Boolean(inheritedColor && inheritedColor.italics)
       });
       return;
     }
@@ -4708,16 +5867,22 @@ Licenses:
     }
 
     const tagName = (node.tagName || '').toLowerCase();
-    let nextColor = inheritedColor || PDF_CODE_DEFAULT_TEXT_COLOR;
+    let nextStyle = resolveCodeInlineStyle(inheritedColor);
     if (tagName === 'span') {
       const className = ensureString(node.className);
       const hasPrismTokenClass = /(?:^|\s)token(?:\s|$)/.test(className);
+      if (hasPrismTokenClass) {
+        const tokenStyle = resolvePrismTokenStyle(className);
+        if (tokenStyle) {
+          nextStyle = Object.assign({}, nextStyle, tokenStyle);
+        }
+      }
       if (hasPrismTokenClass || className) {
         const computedColor = normalizePdfColorValue(
           ensureString(window.getComputedStyle(node).color)
         );
-        if (computedColor) {
-          nextColor = computedColor;
+        if (computedColor && computedColor !== '#000000') {
+          nextStyle.color = computedColor;
         }
       }
     }
@@ -4725,14 +5890,30 @@ Licenses:
     if (tagName === 'br') {
       out.push({
         text: '\n',
-        color: nextColor
+        color: resolveCodeInlineColor(nextStyle),
+        bold: Boolean(nextStyle.bold),
+        italics: Boolean(nextStyle.italics)
       });
       return;
     }
 
     Array.from(node.childNodes || []).forEach((child) => {
-      appendDeepSeekCodeInlinesFromNode(child, nextColor, out);
+      appendDeepSeekCodeInlinesFromNode(child, nextStyle, out);
     });
+  }
+
+  function resolvePrismTokenStyle(className) {
+    const classes = ensureString(className).split(/\s+/).filter(Boolean);
+    for (const classEntry of classes) {
+      if (classEntry === 'token') {
+        continue;
+      }
+      const tokenName = classEntry.replace(/-/g, '_');
+      if (PDF_PRISM_TOKEN_STYLES[tokenName]) {
+        return PDF_PRISM_TOKEN_STYLES[tokenName];
+      }
+    }
+    return null;
   }
 
   function resolveInlineColorFromStyleAttr(node) {
@@ -4829,16 +6010,25 @@ Licenses:
       if (
         previous &&
         previous.color === part.color &&
+        Boolean(previous.bold) === Boolean(part.bold) &&
+        Boolean(previous.italics) === Boolean(part.italics) &&
         previous.text !== '\n' &&
         part.text !== '\n'
       ) {
         previous.text += part.text;
         return;
       }
-      merged.push({
+      const mergedPart = {
         text: part.text,
         color: part.color || PDF_CODE_DEFAULT_TEXT_COLOR
-      });
+      };
+      if (part.bold) {
+        mergedPart.bold = true;
+      }
+      if (part.italics) {
+        mergedPart.italics = true;
+      }
+      merged.push(mergedPart);
     });
     return merged;
   }
@@ -4889,85 +6079,131 @@ Licenses:
   }
 
   function extractCodeBlockLanguage(node) {
+    const platformLanguage = extractPlatformCodeBlockLanguage(node);
+    if (platformLanguage) {
+      return platformLanguage;
+    }
+    return extractGenericCodeBlockLanguage(node);
+  }
+
+  function extractPlatformCodeBlockLanguage(node) {
     if (platform === 'chatgpt') {
-      const chatGptHeader =
-        node.querySelector('div.text-token-text-primary') ||
-        node.querySelector('.text-token-text-primary');
-      if (chatGptHeader) {
-        const value = normalizeText(chatGptHeader.textContent || '');
-        if (value) {
-          return value;
-        }
-      }
+      return extractTextFromFirstNode(node, [
+        'div.text-token-text-primary',
+        '.text-token-text-primary'
+      ]);
     }
     if (platform === 'gemini') {
-      const geminiHeader =
-        querySelectorScoped(node, ':scope > .code-block > .code-block-decoration span') ||
-        querySelectorScoped(node, ':scope > .code-block-decoration span') ||
-        node.querySelector('.code-block-decoration.header-formatted span') ||
-        node.querySelector('.code-block-decoration span') ||
-        node.querySelector('.code-block-decoration');
-      if (geminiHeader) {
-        const value = normalizeText(geminiHeader.textContent || '');
-        if (value) {
-          return value;
-        }
-      }
+      return extractTextFromFirstNode(node, [
+        ':scope > .code-block > .code-block-decoration span',
+        ':scope > .code-block-decoration span',
+        '.code-block-decoration.header-formatted span',
+        '.code-block-decoration span',
+        '.code-block-decoration'
+      ]);
     }
     if (platform === 'deepseek') {
       const deepSeekContainer = (node.closest && node.closest('.md-code-block')) || node;
-      const deepSeekHeader =
-        deepSeekContainer.querySelector('.md-code-block-banner .d813de27') ||
-        deepSeekContainer.querySelector('.md-code-block-banner [class*="d813de27"]') ||
-        deepSeekContainer.querySelector('.code-info-button-text');
-      if (deepSeekHeader) {
-        const value = normalizeText(deepSeekHeader.textContent || '');
-        if (value && !/^(copy|download|copier|télécharger)$/i.test(value)) {
-          return value;
-        }
+      return extractDeepSeekCodeLanguage(deepSeekContainer);
+    }
+    return '';
+  }
+
+  function extractTextFromFirstNode(root, selectors) {
+    for (const selector of selectors) {
+      const node = selector.startsWith(':scope')
+        ? querySelectorScoped(root, selector)
+        : root.querySelector(selector);
+      const value = node ? normalizeText(node.textContent || '') : '';
+      if (value) {
+        return value;
       }
     }
+    return '';
+  }
 
-    const explicitLanguage =
-      node.querySelector('.code-block-decoration span') ||
-      node.querySelector('.text-text-500') ||
-      node.querySelector('.md-code-block-banner .d813de27') ||
-      node.querySelector('.md-code-block-banner [class*="d813de27"]') ||
-      node.querySelector('[class*="code-info-language"]');
+  function extractGenericCodeBlockLanguage(node) {
+    const explicitLanguage = extractTextFromFirstNode(node, [
+      '.code-block-decoration span',
+      '.text-text-500',
+      '.md-code-block-banner .d813de27',
+      '.md-code-block-banner [class*="d813de27"]',
+      '[class*="code-info-language"]'
+    ]);
     if (explicitLanguage) {
-      const value = normalizeText(explicitLanguage.textContent || '');
+      return explicitLanguage;
+    }
+    return extractLanguageFromCodeClass(node) || extractLanguageFromCodeLabels(node);
+  }
+
+  function extractLanguageFromCodeClass(node) {
+    const codeClassSource = node.querySelector('pre code, code');
+    const classMatch = codeClassSource && codeClassSource.className
+      ? String(codeClassSource.className).match(/(?:^|\s)language-([a-z0-9_+.-]+)/i)
+      : null;
+    return classMatch && classMatch[1] ? classMatch[1] : '';
+  }
+
+  function extractLanguageFromCodeLabels(node) {
+    const labels = Array.from(node.querySelectorAll('span, div'))
+      .filter((el) => !el.closest('pre, code, .cm-content, .cm-line'))
+      .map((el) => normalizeText(el.textContent || ''))
+      .filter(Boolean);
+    return labels.find(isUsableCodeLanguageLabel) || '';
+  }
+
+  function isUsableCodeLanguageLabel(label) {
+    const blocked = new Set(['Copier', 'Copy', 'Envelopper', 'Wrap', 'Exécuter', 'Run', 'Download', 'Télécharger']);
+    return !blocked.has(label) &&
+      label.length >= 2 &&
+      label.length <= 24 &&
+      /^[A-Za-z][A-Za-z0-9+#.\- ]*$/.test(label);
+  }
+
+  function extractDeepSeekCodeLanguage(node) {
+    if (!node || !node.querySelector) {
+      return '';
+    }
+    const container = (node.closest && node.closest('.md-code-block')) || node;
+    const banner = container.querySelector('.md-code-block-banner') ||
+      container.querySelector('.md-code-block-banner-wrap') ||
+      container;
+    const languageNodes = [
+      querySelectorScoped(banner, ':scope .d813de27'),
+      querySelectorScoped(banner, ':scope [class*="d813de27"]'),
+      querySelectorScoped(banner, ':scope [class*="code-info-language"]'),
+      querySelectorScoped(banner, ':scope span:first-child')
+    ].filter(Boolean);
+
+    for (const languageNode of languageNodes) {
+      const value = normalizeDeepSeekLanguageLabel(languageNode.textContent || '');
       if (value) {
         return value;
       }
     }
 
-    const codeClassSource = node.querySelector('pre code, code');
-    if (codeClassSource && codeClassSource.className) {
-      const classMatch = String(codeClassSource.className).match(/(?:^|\s)language-([a-z0-9_+.-]+)/i);
+    const preOrCode = container.querySelector('pre[class*="language-"], code[class*="language-"]');
+    if (preOrCode) {
+      const classMatch = ensureString(preOrCode.className).match(/(?:^|\s)language-([a-z0-9_+.-]+)/i);
       if (classMatch && classMatch[1]) {
-        return classMatch[1];
+        return normalizeDeepSeekLanguageLabel(classMatch[1]);
       }
     }
 
-    const labels = Array.from(node.querySelectorAll('span, div'))
-      .filter((el) => !el.closest('pre, code, .cm-content, .cm-line'))
-      .map((el) => normalizeText(el.textContent || ''))
-      .filter(Boolean);
-
-    const blocked = new Set(['Copier', 'Copy', 'Envelopper', 'Wrap', 'Exécuter', 'Run', 'Download', 'Télécharger']);
-    for (const label of labels) {
-      if (blocked.has(label)) {
-        continue;
-      }
-      if (label.length < 2 || label.length > 24) {
-        continue;
-      }
-      if (!/^[A-Za-z][A-Za-z0-9+#.\- ]*$/.test(label)) {
-        continue;
-      }
-      return label;
-    }
     return '';
+  }
+
+  function normalizeDeepSeekLanguageLabel(value) {
+    const normalized = normalizeText(value || '')
+      .replace(/\b(Copy|Download|Copier|Télécharger)\b/gi, '')
+      .trim();
+    if (!normalized || /^(text|plain\s*text)$/i.test(normalized)) {
+      return '';
+    }
+    if (!/^[A-Za-z][A-Za-z0-9+#.\- ]{0,31}$/.test(normalized)) {
+      return '';
+    }
+    return normalized;
   }
 
   function extractCodeBlockText(node) {
@@ -5167,9 +6403,11 @@ Licenses:
       }
     });
 
+    const compact = maxCols >= 5;
     return {
       table: {
-        widths: new Array(maxCols).fill('*'),
+        widths: buildPdfTableColumnWidths(maxCols),
+        dontBreakRows: false,
         body: body
       },
       layout: {
@@ -5177,13 +6415,24 @@ Licenses:
         vLineWidth: () => 0.5,
         hLineColor: () => '#cbd5e1',
         vLineColor: () => '#cbd5e1',
-        paddingLeft: () => 6,
-        paddingRight: () => 6,
-        paddingTop: () => 5,
-        paddingBottom: () => 5
+        paddingLeft: () => (compact ? 4 : 6),
+        paddingRight: () => (compact ? 4 : 6),
+        paddingTop: () => (compact ? 4 : 5),
+        paddingBottom: () => (compact ? 4 : 5)
       },
+      fontSize: compact ? 7.5 : 8.5,
       margin: [0, 8, 0, 12]
     };
+  }
+
+  function buildPdfTableColumnWidths(columnCount) {
+    const count = Math.max(1, Number(columnCount) || 1);
+    if (count <= 4) {
+      return new Array(count).fill('*');
+    }
+    const availableWidth = Math.max(220, PDF_CONTENT_WIDTH_PT - PDF_TABLE_SAFE_RIGHT_MARGIN_PT - 24);
+    const columnWidth = Math.max(46, Math.floor(availableWidth / count));
+    return new Array(count).fill(columnWidth);
   }
 
   function isTableHeaderRow(row, rowIndex) {
@@ -5211,13 +6460,66 @@ Licenses:
       return { text: '' };
     }
     if (Array.isArray(parsed)) {
-      const inline = buildInlinePdfText(parsed);
+      const normalizedParts = normalizePdfTableCellContent(parsed);
+      const inline = buildInlinePdfText(normalizedParts);
       if (inline) {
         return inline;
       }
-      return { stack: parsed };
+      return { stack: Array.isArray(normalizedParts) ? normalizedParts : [normalizedParts] };
     }
-    return parsed;
+    return normalizePdfTableCellContent(parsed);
+  }
+
+  function normalizePdfTableCellContent(content) {
+    if (Array.isArray(content)) {
+      return content.map((entry) => normalizePdfTableCellContent(entry)).filter(Boolean);
+    }
+    if (!content || typeof content !== 'object') {
+      return content;
+    }
+    const next = Object.assign({}, content);
+    if (Object.prototype.hasOwnProperty.call(next, 'text')) {
+      next.text = normalizePdfTableCellTextValue(next.text);
+      next.noWrap = false;
+      if (next.font === 'monospace' && !next.fontSize) {
+        next.fontSize = 7;
+      }
+    }
+    if (Array.isArray(next.stack)) {
+      next.stack = normalizePdfTableCellContent(next.stack);
+    }
+    if (Array.isArray(next.ul)) {
+      next.ul = normalizePdfTableCellContent(next.ul);
+    }
+    if (Array.isArray(next.ol)) {
+      next.ol = normalizePdfTableCellContent(next.ol);
+    }
+    if (Array.isArray(next.columns)) {
+      next.columns = normalizePdfTableCellContent(next.columns);
+    }
+    return next;
+  }
+
+  function normalizePdfTableCellTextValue(value) {
+    if (typeof value === 'string') {
+      return addPdfTableBreakOpportunities(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => normalizePdfTableCellTextValue(entry));
+    }
+    if (value && typeof value === 'object') {
+      const next = Object.assign({}, value);
+      if (Object.prototype.hasOwnProperty.call(next, 'text')) {
+        next.text = normalizePdfTableCellTextValue(next.text);
+        next.noWrap = false;
+      }
+      return next;
+    }
+    return value;
+  }
+
+  function addPdfTableBreakOpportunities(text) {
+    return ensureString(text).replace(/([/._?=&:#-])/g, '$1\u200b');
   }
 
   function buildInlinePdfText(parts) {
@@ -5534,6 +6836,320 @@ Licenses:
     return await readRemoteFontBuffer(response, onProgress);
   }
 
+  async function prepareMessagesForPdfImages(messages) {
+    const prepared = [];
+    for (const message of messages || []) {
+      let html = ensureString(message && message.html);
+      let pdfNode = null;
+      if (message && message.sourceNode && message.sourceNode.nodeType === Node.ELEMENT_NODE) {
+        const sourceImages = buildSourceImageLookup(message.sourceNode);
+        pdfNode = prepareNodeForExport(message.sourceNode);
+        await inlinePdfImagesInNode(pdfNode, sourceImages);
+        html = pdfNode.innerHTML || html;
+      } else if (htmlHasExportableImages(html)) {
+        const parsedNode = await inlinePdfImagesInHtml(html);
+        if (parsedNode) {
+          pdfNode = parsedNode;
+          html = parsedNode.innerHTML || html;
+        }
+      }
+      prepared.push(Object.assign({}, message, {
+        html: html,
+        pdfNode: pdfNode,
+        sourceNode: null
+      }));
+    }
+    return prepared;
+  }
+
+  async function inlinePdfImagesInHtml(html) {
+    const container = parseHtmlContainer(html);
+    if (!container) {
+      return null;
+    }
+    await inlinePdfImagesInNode(container);
+    return container;
+  }
+
+  async function inlinePdfImagesInNode(container, sourceImages) {
+    if (!container || !container.querySelectorAll) {
+      return container;
+    }
+    normalizeExportableImages(container);
+    const images = collectExportableImageElements(container);
+    for (const image of images) {
+      const src = normalizeImageSource(image);
+      if (!src || /^data:image\//i.test(src)) {
+        continue;
+      }
+      try {
+        const dataUrl = /^blob:/i.test(src)
+          ? await convertLoadedImageElementToPngDataUrl(resolveLiveImageForSource(src, sourceImages) || image)
+          : await loadPdfImageDataUrl(src);
+        if (dataUrl) {
+          image.setAttribute('src', dataUrl);
+          image.removeAttribute('srcset');
+          image.removeAttribute('sizes');
+          image.setAttribute('loading', 'eager');
+          image.setAttribute('decoding', 'sync');
+        }
+      } catch (err) {
+        console.warn('OmniChat: failed to inline PDF image', src, err);
+        if (/not a part of the @connect list|refused to connect/i.test(ensureString(err && err.message))) {
+          updatePdfExportLoader({
+            stage: 'Preparing images...',
+            detail: `Image host blocked by userscript permissions: ${extractHostnameFromUrl(src)}.`,
+            progress: 0.86,
+            progressText: 'Step 4 of 5',
+            indeterminate: false
+          });
+          await waitForNextPaint();
+        }
+      }
+    }
+    return container;
+  }
+
+  function buildSourceImageLookup(sourceNode) {
+    const lookup = Object.create(null);
+    collectExportableImageElements(sourceNode).forEach((image) => {
+      const src = normalizeImageSource(image);
+      if (src && !lookup[src]) {
+        lookup[src] = image;
+      }
+    });
+    return lookup;
+  }
+
+  function resolveLiveImageForSource(src, sourceImages) {
+    const key = ensureString(src);
+    if (sourceImages && sourceImages[key]) {
+      return sourceImages[key];
+    }
+    if (!key || typeof document === 'undefined' || !document.querySelectorAll) {
+      return null;
+    }
+    const images = Array.from(document.querySelectorAll('img'));
+    return images.find((image) => normalizeImageSource(image) === key) || null;
+  }
+
+  function extractHostnameFromUrl(value) {
+    try {
+      return new URL(ensureString(value), location.href).hostname || 'unknown host';
+    } catch (err) {
+      return 'unknown host';
+    }
+  }
+
+  async function loadPdfImageDataUrl(src) {
+    const url = ensureString(src).trim();
+    if (!url) {
+      return '';
+    }
+    if (/^data:image\//i.test(url)) {
+      return url;
+    }
+    if (!pdfImageDataUrlPromises[url]) {
+      pdfImageDataUrlPromises[url] = fetchPdfImageDataUrl(url);
+    }
+    return pdfImageDataUrlPromises[url];
+  }
+
+  async function fetchPdfImageDataUrl(src) {
+    if (/^blob:/i.test(ensureString(src))) {
+      return convertImageSrcToPngDataUrl(src);
+    }
+    try {
+      const response = await fetch(src, {
+        cache: 'force-cache',
+        credentials: 'include'
+      });
+      if (response && response.ok) {
+        const blob = await response.blob();
+        if (blob && blob.size) {
+          if (!isPdfMakeSupportedImageMime(blob.type)) {
+            return await convertBlobToPngDataUrl(blob);
+          }
+          const dataUrl = await blobToDataUrl(blob);
+          if (/^data:image\//i.test(dataUrl)) {
+            return dataUrl;
+          }
+          const buffer = await blob.arrayBuffer();
+          const base64 = await arrayBufferToBase64(buffer);
+          return `data:${inferImageMimeType(src, blob.type)};base64,${base64}`;
+        }
+      }
+    } catch (err) {
+    }
+
+    const buffer = await requestRemoteImageArrayBuffer(src);
+    if (!buffer || !buffer.byteLength) {
+      return '';
+    }
+    const mimeType = inferImageMimeTypeFromBuffer(buffer) || inferImageMimeType(src, '');
+    if (!isPdfMakeSupportedImageMime(mimeType)) {
+      return await convertBlobToPngDataUrl(new Blob([buffer], { type: mimeType }));
+    }
+    const base64 = await arrayBufferToBase64(buffer);
+    return `data:${mimeType};base64,${base64}`;
+  }
+
+  async function requestRemoteImageArrayBuffer(url) {
+    if (typeof GM_xmlhttpRequest === 'function') {
+      return gmXmlHttpRequestPromise({
+        method: 'GET',
+        url: url,
+        responseType: 'arraybuffer',
+        label: 'PDF image',
+        anonymous: false
+      });
+    }
+    return requestRemoteArrayBuffer(url, 'PDF image');
+  }
+
+  function isPdfMakeSupportedImageMime(mimeType) {
+    return /^image\/(?:png|jpe?g)$/i.test(ensureString(mimeType).split(';')[0].trim());
+  }
+
+  function inferImageMimeTypeFromBuffer(buffer) {
+    if (!buffer || !buffer.byteLength) {
+      return '';
+    }
+    const bytes = new Uint8Array(buffer.slice(0, Math.min(16, buffer.byteLength)));
+    if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return 'image/jpeg';
+    }
+    if (
+      bytes.length >= 12 &&
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+      return 'image/webp';
+    }
+    if (bytes.length >= 3 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+      return 'image/gif';
+    }
+    return '';
+  }
+
+  async function convertBlobToPngDataUrl(blob) {
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      return await convertImageSrcToPngDataUrl(objectUrl);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function convertLoadedImageElementToPngDataUrl(image) {
+    if (!image) {
+      return '';
+    }
+    if (!image.complete || !(image.naturalWidth || image.width)) {
+      await waitForImageReady(image);
+    }
+    const dataUrl = drawImageElementToPngDataUrl(image);
+    if (dataUrl) {
+      return dataUrl;
+    }
+    const src = normalizeImageSource(image);
+    return src ? convertImageSrcToPngDataUrl(src) : '';
+  }
+
+  async function convertImageSrcToPngDataUrl(src) {
+    const image = await loadImageElement(src);
+    return drawImageElementToPngDataUrl(image);
+  }
+
+  function drawImageElementToPngDataUrl(image) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, image.naturalWidth || image.width || 1);
+    canvas.height = Math.max(1, image.naturalHeight || image.height || 1);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return '';
+    }
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  }
+
+  function waitForImageReady(image) {
+    return new Promise((resolve, reject) => {
+      if (!image) {
+        reject(new Error('Image element missing'));
+        return;
+      }
+      if (image.complete && (image.naturalWidth || image.width)) {
+        resolve(image);
+        return;
+      }
+      let timeoutId = null;
+      const cleanup = () => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        image.removeEventListener('load', onLoad);
+        image.removeEventListener('error', onError);
+      };
+      const onLoad = () => {
+        cleanup();
+        resolve(image);
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error('Image decode failed'));
+      };
+      image.addEventListener('load', onLoad, { once: true });
+      image.addEventListener('error', onError, { once: true });
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('Image load timed out'));
+      }, 5000);
+    });
+  }
+
+  function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Image decode failed'));
+      image.src = src;
+    });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(ensureString(reader.result));
+      reader.onerror = () => reject(reader.error || new Error('Image FileReader failed'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function inferImageMimeType(src, contentType) {
+    const type = ensureString(contentType).split(';')[0].trim().toLowerCase();
+    if (type && /^image\//i.test(type)) {
+      return type;
+    }
+    const cleanSrc = ensureString(src).split(/[?#]/)[0].toLowerCase();
+    if (cleanSrc.endsWith('.jpg') || cleanSrc.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (cleanSrc.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (cleanSrc.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    if (cleanSrc.endsWith('.png')) {
+      return 'image/png';
+    }
+    return 'image/png';
+  }
+
   function gmXmlHttpRequestPromise(options) {
     return new Promise((resolve, reject) => {
       try {
@@ -5541,7 +7157,7 @@ Licenses:
           method: options.method || 'GET',
           url: options.url,
           responseType: options.responseType,
-          anonymous: true,
+          anonymous: options.anonymous !== false,
           onprogress: (event) => {
             if (typeof options.onProgress === 'function') {
               const loaded = Number(event && event.loaded) || 0;
@@ -5969,7 +7585,7 @@ Licenses:
       stage: 'Detecting languages and scripts...',
       detail: 'Analyzing the full chat locally before preparing the PDF.',
       progress: 0.18,
-      progressText: 'Step 2 of 4',
+      progressText: 'Step 2 of 5',
       indeterminate: false
     });
     await waitForNextPaint();
@@ -5997,7 +7613,7 @@ Licenses:
       stage: 'Detecting languages and scripts...',
       detail: formatPdfDetectionSummary(languageProfile),
       progress: 0.28,
-      progressText: 'Step 2 of 4',
+      progressText: 'Step 2 of 5',
       indeterminate: false
     });
     await waitForNextPaint();
@@ -6005,7 +7621,7 @@ Licenses:
       stage: 'Loading PDF fonts...',
       detail: formatPdfDetectionSummary(languageProfile),
       progress: 0.34,
-      progressText: 'Step 3 of 4',
+      progressText: 'Step 3 of 5',
       indeterminate: false
     });
     await waitForNextPaint();
@@ -6013,9 +7629,17 @@ Licenses:
     if (!fontName) {
       return false;
     }
-    const pageMargins = [42, 38, 42, 50];
-    const pageWidthPt = 595.28;
-    const dividerWidth = pageWidthPt - pageMargins[0] - pageMargins[2];
+    updatePdfExportLoader({
+      stage: 'Preparing images...',
+      detail: 'Embedding generated images from the chat into the PDF document.',
+      progress: 0.86,
+      progressText: 'Step 4 of 5',
+      indeterminate: false
+    });
+    await waitForNextPaint();
+    const pdfMessages = await prepareMessagesForPdfImages(messages);
+    const pageMargins = PDF_PAGE_MARGINS;
+    const dividerWidth = PDF_CONTENT_WIDTH_PT;
     const wrapRoleLabel = (role) => {
       if (!role) return 'MESSAGE';
       const lowered = String(role).toLowerCase();
@@ -6045,21 +7669,19 @@ Licenses:
         }
       ];
 
-      messages.forEach((message) => {
+      pdfMessages.forEach((message) => {
         const theme = roleTheme(message.role);
         const roleLabel = wrapRoleLabel(message.role);
         const messageText = ensureString(message.text);
         const htmlContent = message.html || messageText;
-        const liveGeminiNode =
-          platform === 'gemini' &&
+        const preparedNode =
           message &&
-          message.sourceNode &&
-          message.sourceNode.nodeType === Node.ELEMENT_NODE &&
-          message.sourceNode.isConnected
-            ? message.sourceNode
+          message.pdfNode &&
+          message.pdfNode.nodeType === Node.ELEMENT_NODE
+            ? message.pdfNode
             : null;
-        const richContent = liveGeminiNode
-          ? parseNodeToPdfMake(liveGeminiNode)
+        const richContent = preparedNode
+          ? parseNodeToPdfMake(preparedNode)
           : convertHtmlToPdfMake(htmlContent);
         const normalizedRichContent = normalizePdfContentForPlatform(richContent);
         const emojiRichContent = applyEmojiFontToTree(normalizedRichContent);
@@ -6110,7 +7732,14 @@ Licenses:
           return {
             columns: [
               {
-                text: 'Generated with OmniChat Exporter',
+                text: [
+                  { text: 'Generated with ' },
+                  {
+                    text: 'OmniChat Exporter',
+                    link: PROJECT_URL,
+                    decoration: 'underline'
+                  }
+                ],
                 alignment: 'left'
               },
               {
@@ -6149,7 +7778,7 @@ Licenses:
         stage: 'Generating PDF...',
         detail: 'Finalizing layout and preparing the download.',
         progress: 0.92,
-        progressText: 'Step 4 of 4',
+        progressText: 'Step 5 of 5',
         indeterminate: false
       });
       await waitForNextPaint();
@@ -6384,6 +8013,33 @@ Licenses:
   }
 
   async function ensurePdfMakeFonts(pdfMakeInstance, languageProfile) {
+    const vfs = resolvePdfMakeVfs(pdfMakeInstance);
+    if (hasPdfVfsEntries(vfs)) {
+      mergePdfVfs(pdfMakeInstance, vfs);
+    }
+
+    const baseFont = ensureBaseFont(pdfMakeInstance);
+    if (!baseFont) {
+      return null;
+    }
+
+    activePdfFontContext = buildPdfFontContext(baseFont, languageProfile);
+    activePdfEmojiFontFamily = '';
+
+    const scriptLoadList = getPdfScriptLoadList(activePdfFontContext);
+    activePdfFontContext.safeSegmentationScripts = getSafePdfSegmentationScripts(scriptLoadList);
+    const pendingResources = getPendingPdfFontResources(pdfMakeInstance, scriptLoadList, languageProfile);
+    if (!pendingResources.length) {
+      await showPdfFontsAlreadyCached();
+    }
+
+    await loadPdfScriptFonts(pdfMakeInstance, scriptLoadList, pendingResources);
+    await loadPdfEmojiFontIfNeeded(pdfMakeInstance, languageProfile, pendingResources);
+    await showPdfFontsReady(pendingResources);
+    return baseFont;
+  }
+
+  function resolvePdfMakeVfs(pdfMakeInstance) {
     const localPdfMake = getLocalPdfMake();
     const vfsCandidates = [
       pdfMakeInstance.vfs,
@@ -6393,23 +8049,15 @@ Licenses:
       window.pdfFonts && window.pdfFonts.pdfMake && window.pdfFonts.pdfMake.vfs,
       window.pdfFonts && window.pdfFonts.vfs
     ];
-    let vfs = null;
-    for (const candidate of vfsCandidates) {
-      if (candidate && typeof candidate === 'object') {
-        vfs = candidate;
-        break;
-      }
-    }
-    if (vfs && Object.keys(vfs).length) {
-      mergePdfVfs(pdfMakeInstance, vfs);
-    }
+    return vfsCandidates.find((candidate) => candidate && typeof candidate === 'object') || null;
+  }
 
-    const baseFont = ensureBaseFont(pdfMakeInstance);
-    if (!baseFont) {
-      return null;
-    }
+  function hasPdfVfsEntries(vfs) {
+    return Boolean(vfs && Object.keys(vfs).length);
+  }
 
-    activePdfFontContext = {
+  function buildPdfFontContext(baseFont, languageProfile) {
+    return {
       baseFont: baseFont,
       mainLanguage: languageProfile && languageProfile.mainLanguage ? languageProfile.mainLanguage : 'und',
       detectedLanguages: languageProfile && Array.isArray(languageProfile.detectedLanguages)
@@ -6422,74 +8070,95 @@ Licenses:
       scriptFonts: Object.create(null),
       emojiFontFamily: ''
     };
+  }
 
-    activePdfEmojiFontFamily = '';
-    const scriptLoadList = activePdfFontContext.detectedScripts.filter((script) => {
-      return Boolean(PDF_SCRIPT_FONT_SPECS[script]);
-    });
-    const existingVfs = pdfMakeInstance.vfs || {};
-    const pendingResources = [];
+  function getPdfScriptLoadList(fontContext) {
+    return fontContext.detectedScripts.filter((script) => Boolean(PDF_SCRIPT_FONT_SPECS[script]));
+  }
 
-    scriptLoadList.forEach((script) => {
-      const spec = PDF_SCRIPT_FONT_SPECS[script];
-      if (spec && !existingVfs[spec.file]) {
-        pendingResources.push({ key: script, kind: 'script' });
-      }
-    });
-    if (platform === 'gemini') {
-      activePdfFontContext.safeSegmentationScripts = scriptLoadList.filter((script, index, list) => {
-        return PDF_SAFE_SEGMENTATION_SCRIPTS.indexOf(script) !== -1 && list.indexOf(script) === index;
-      });
+  function getSafePdfSegmentationScripts(scriptLoadList) {
+    if (platform !== 'gemini') {
+      return [];
     }
-    if (PDF_ENABLE_EMOJI_FONT && languageProfile && languageProfile.containsEmoji && !existingVfs[PDF_EMOJI_FONT_FILE]) {
+    return scriptLoadList.filter((script, index, list) => {
+      return PDF_SAFE_SEGMENTATION_SCRIPTS.indexOf(script) !== -1 && list.indexOf(script) === index;
+    });
+  }
+
+  function getPendingPdfFontResources(pdfMakeInstance, scriptLoadList, languageProfile) {
+    const existingVfs = pdfMakeInstance.vfs || {};
+    const pendingResources = scriptLoadList
+      .filter((script) => {
+        const spec = PDF_SCRIPT_FONT_SPECS[script];
+        return spec && !existingVfs[spec.file];
+      })
+      .map((script) => ({ key: script, kind: 'script' }));
+    if (shouldLoadPdfEmojiFont(existingVfs, languageProfile)) {
       pendingResources.push({ key: 'emoji', kind: 'emoji' });
     }
+    return pendingResources;
+  }
 
-    if (!pendingResources.length) {
-      updatePdfExportLoader({
-        stage: 'Loading PDF fonts...',
-        detail: 'All required fonts are already cached locally.',
-        progress: 0.84,
-        progressText: 'Step 3 of 4',
-        indeterminate: false
-      });
-      await waitForNextPaint();
-    }
+  function shouldLoadPdfEmojiFont(existingVfs, languageProfile) {
+    return Boolean(
+      PDF_ENABLE_EMOJI_FONT &&
+      languageProfile &&
+      languageProfile.containsEmoji &&
+      !existingVfs[PDF_EMOJI_FONT_FILE]
+    );
+  }
 
+  async function showPdfFontsAlreadyCached() {
+    updatePdfExportLoader({
+      stage: 'Loading PDF fonts...',
+      detail: 'All required fonts are already cached locally.',
+      progress: 0.84,
+      progressText: 'Step 3 of 5',
+      indeterminate: false
+    });
+    await waitForNextPaint();
+  }
+
+  async function loadPdfScriptFonts(pdfMakeInstance, scriptLoadList, pendingResources) {
     for (let index = 0; index < scriptLoadList.length; index += 1) {
       const script = scriptLoadList[index];
-      const family = await ensureScriptFont(pdfMakeInstance, script, {
-        resourceIndex: pendingResources.findIndex((entry) => entry.key === script),
-        totalResources: pendingResources.length,
-        pendingResources: pendingResources
-      });
+      const family = await ensureScriptFont(pdfMakeInstance, script, buildPdfFontProgressState(script, pendingResources));
       if (script && family) {
         activePdfFontContext.scriptFonts[script] = family;
       }
     }
+  }
 
-    const emojiFont = PDF_ENABLE_EMOJI_FONT && languageProfile && languageProfile.containsEmoji
-      ? await ensureEmojiFont(pdfMakeInstance, {
-        resourceIndex: pendingResources.findIndex((entry) => entry.key === 'emoji'),
-        totalResources: pendingResources.length,
-        pendingResources: pendingResources
-      })
-      : '';
+  function buildPdfFontProgressState(key, pendingResources) {
+    return {
+      resourceIndex: pendingResources.findIndex((entry) => entry.key === key),
+      totalResources: pendingResources.length,
+      pendingResources: pendingResources
+    };
+  }
+
+  async function loadPdfEmojiFontIfNeeded(pdfMakeInstance, languageProfile, pendingResources) {
+    if (!PDF_ENABLE_EMOJI_FONT || !languageProfile || !languageProfile.containsEmoji) {
+      return;
+    }
+    const emojiFont = await ensureEmojiFont(pdfMakeInstance, buildPdfFontProgressState('emoji', pendingResources));
     if (emojiFont) {
       activePdfEmojiFontFamily = emojiFont;
       activePdfFontContext.emojiFontFamily = emojiFont;
     }
+  }
+
+  async function showPdfFontsReady(pendingResources) {
     updatePdfExportLoader({
       stage: 'Loading PDF fonts...',
       detail: pendingResources.length
         ? 'Required language fonts are ready for the PDF renderer.'
         : 'No extra font download was needed.',
       progress: 0.84,
-      progressText: 'Step 3 of 4',
+      progressText: 'Step 3 of 5',
       indeterminate: false
     });
     await waitForNextPaint();
-    return baseFont;
   }
 
   function mergePdfVfs(pdfMakeInstance, vfs) {
@@ -6596,46 +8265,72 @@ Licenses:
   }
 
   function updatePdfFontDownloadProgress(progressState, label, loaded, total, indeterminate) {
-    const totalResources = Math.max(0, Number(progressState && progressState.totalResources) || 0);
-    const resourceIndex = Math.max(0, Number(progressState && progressState.resourceIndex) || 0);
+    const state = normalizePdfFontProgressState(progressState);
     const resourceLabel = formatPdfResourceLabel(label);
-    let withinResource = 0;
-    let meta = '';
-
-    if (Number.isFinite(total) && total > 0 && Number.isFinite(loaded)) {
-      withinResource = Math.max(0, Math.min(1, loaded / total));
-      meta = `${resourceLabel} ${Math.round(withinResource * 100)}%`;
-    } else if (Number.isFinite(loaded) && loaded > 0) {
-      meta = `${resourceLabel} ${formatPdfByteSize(loaded)} downloaded`;
-    } else {
-      meta = `${resourceLabel}...`;
-    }
-
-    const overallBase = 0.34;
-    const overallSpan = 0.5;
-    const progress = totalResources > 0
-      ? overallBase + (((resourceIndex + withinResource) / totalResources) * overallSpan)
-      : overallBase;
-    const pendingResources = progressState && Array.isArray(progressState.pendingResources)
-      ? progressState.pendingResources
-      : [];
-    const remainingLabels = pendingResources
-      .slice(Math.min(resourceIndex, pendingResources.length))
-      .map((entry) => formatPdfResourceLabel(entry.key));
-    const resourceCountText = totalResources > 0
-      ? `${Math.min(resourceIndex + 1, totalResources)} / ${totalResources} resources`
-      : 'Step 3 of 4';
-    const detail = remainingLabels.length
-      ? `Loading ${resourceLabel}. Remaining resources: ${remainingLabels.join(', ')}.`
-      : `Loading ${resourceLabel}.`;
+    const resourceProgress = getPdfFontResourceProgress(resourceLabel, loaded, total);
 
     updatePdfExportLoader({
       stage: 'Loading PDF fonts...',
-      detail: detail,
-      progress: progress,
-      progressText: meta ? `${resourceCountText} | ${meta}` : resourceCountText,
+      detail: buildPdfFontProgressDetail(resourceLabel, state),
+      progress: calculatePdfFontOverallProgress(state, resourceProgress.withinResource),
+      progressText: buildPdfFontProgressText(state, resourceProgress.meta),
       indeterminate: Boolean(indeterminate && !(Number.isFinite(total) && total > 0))
     });
+  }
+
+  function normalizePdfFontProgressState(progressState) {
+    return {
+      totalResources: Math.max(0, Number(progressState && progressState.totalResources) || 0),
+      resourceIndex: Math.max(0, Number(progressState && progressState.resourceIndex) || 0),
+      pendingResources: progressState && Array.isArray(progressState.pendingResources)
+        ? progressState.pendingResources
+        : []
+    };
+  }
+
+  function getPdfFontResourceProgress(resourceLabel, loaded, total) {
+    if (Number.isFinite(total) && total > 0 && Number.isFinite(loaded)) {
+      const withinResource = Math.max(0, Math.min(1, loaded / total));
+      return {
+        withinResource,
+        meta: `${resourceLabel} ${Math.round(withinResource * 100)}%`
+      };
+    }
+    if (Number.isFinite(loaded) && loaded > 0) {
+      return {
+        withinResource: 0,
+        meta: `${resourceLabel} ${formatPdfByteSize(loaded)} downloaded`
+      };
+    }
+    return {
+      withinResource: 0,
+      meta: `${resourceLabel}...`
+    };
+  }
+
+  function calculatePdfFontOverallProgress(state, withinResource) {
+    const overallBase = 0.34;
+    const overallSpan = 0.5;
+    if (state.totalResources <= 0) {
+      return overallBase;
+    }
+    return overallBase + (((state.resourceIndex + withinResource) / state.totalResources) * overallSpan);
+  }
+
+  function buildPdfFontProgressDetail(resourceLabel, state) {
+    const remainingLabels = state.pendingResources
+      .slice(Math.min(state.resourceIndex, state.pendingResources.length))
+      .map((entry) => formatPdfResourceLabel(entry.key));
+    return remainingLabels.length
+      ? `Loading ${resourceLabel}. Remaining resources: ${remainingLabels.join(', ')}.`
+      : `Loading ${resourceLabel}.`;
+  }
+
+  function buildPdfFontProgressText(state, meta) {
+    const resourceCountText = state.totalResources > 0
+      ? `${Math.min(state.resourceIndex + 1, state.totalResources)} / ${state.totalResources} resources`
+      : 'Step 3 of 5';
+    return meta ? `${resourceCountText} | ${meta}` : resourceCountText;
   }
 
   async function readRemoteFontBuffer(response, onProgress) {
@@ -6896,41 +8591,47 @@ Licenses:
   function resolvePdfFontFamilyForTextUnit(unit, fontContext) {
     const segment = unit && typeof unit === 'object' ? ensureString(unit.text) : ensureString(unit);
     if (!fontContext || !fontContext.scriptFonts) {
-      if (activePdfEmojiFontFamily && containsEmojiStyleForPdf(segment)) {
-        return activePdfEmojiFontFamily;
-      }
-      return '';
+      return resolveFallbackEmojiPdfFont(segment);
     }
     const script = unit && typeof unit === 'object' ? ensureString(unit.scriptHint) : '';
-    if (script === 'symbols' && activePdfEmojiFontFamily) {
-      return activePdfEmojiFontFamily;
-    }
-    if (script === 'symbols' && fontContext.scriptFonts.symbolsText) {
-      return fontContext.scriptFonts.symbolsText;
-    }
-    if (script === 'symbolsText' && fontContext.scriptFonts.symbolsText) {
-      return fontContext.scriptFonts.symbolsText;
-    }
-    if (script === 'symbolsText' && activePdfEmojiFontFamily) {
-      return activePdfEmojiFontFamily;
+    const symbolFont = resolvePdfSymbolFont(script, fontContext);
+    if (symbolFont) {
+      return symbolFont;
     }
     if (script && fontContext.scriptFonts[script]) {
       return fontContext.scriptFonts[script];
     }
-    if (activePdfEmojiFontFamily && containsEmojiStyleForPdf(segment)) {
-      return activePdfEmojiFontFamily;
+    return resolveFallbackEmojiPdfFont(segment);
+  }
+
+  function resolveFallbackEmojiPdfFont(segment) {
+    return activePdfEmojiFontFamily && containsEmojiStyleForPdf(segment)
+      ? activePdfEmojiFontFamily
+      : '';
+  }
+
+  function resolvePdfSymbolFont(script, fontContext) {
+    if (script === 'symbols') {
+      return activePdfEmojiFontFamily || fontContext.scriptFonts.symbolsText || '';
+    }
+    if (script === 'symbolsText') {
+      return fontContext.scriptFonts.symbolsText || activePdfEmojiFontFamily || '';
     }
     return '';
   }
 
   function detectPdfScriptForSegment(segment, graphemes, index, fontContext) {
-    if (PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)) {
-      return 'latinExtended';
+    const priorityScript = detectPriorityPdfScript(segment, graphemes, index);
+    if (priorityScript) {
+      return priorityScript;
     }
-    if (PDF_LATIN_COMBINING_MARK_PATTERN.test(segment) && hasLatinExtendedContext(graphemes, index)) {
-      return 'latinExtended';
-    }
-    if (PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) && hasLatinExtendedContext(graphemes, index)) {
+    return detectDirectPdfScript(segment);
+  }
+
+  function detectPriorityPdfScript(segment, graphemes, index) {
+    if (PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment) ||
+      PDF_LATIN_COMBINING_MARK_PATTERN.test(segment) && hasLatinExtendedContext(graphemes, index) ||
+      PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) && hasLatinExtendedContext(graphemes, index)) {
       return 'latinExtended';
     }
     if (PDF_SCRIPT_DETECTION_PATTERNS.japanese.test(segment)) {
@@ -6942,6 +8643,10 @@ Licenses:
     if (PDF_CJK_SYMBOL_PATTERN.test(segment) || PDF_HAN_PATTERN.test(segment)) {
       return resolveCjkPdfScript(graphemes, index, fontContext);
     }
+    return '';
+  }
+
+  function detectDirectPdfScript(segment) {
     if (containsEmojiStyleForPdf(segment)) {
       return 'symbols';
     }
@@ -7012,48 +8717,51 @@ Licenses:
       return 'korean';
     }
 
-    const detectedScripts = new Set(
-      fontContext && Array.isArray(fontContext.detectedScripts) ? fontContext.detectedScripts : []
-    );
-    const detectedLanguages = fontContext && Array.isArray(fontContext.detectedLanguages)
-      ? fontContext.detectedLanguages
-      : [];
-    const mainLanguage = fontContext && fontContext.mainLanguage ? fontContext.mainLanguage : '';
+    const context = getCjkPdfLanguageContext(fontContext);
+    return resolveCjkScriptFromMainLanguage(context) ||
+      resolveCjkScriptFromDetectedLanguages(context) ||
+      resolveCjkScriptFromDetectedScripts(context);
+  }
 
-    if (mainLanguage === 'ja' && detectedScripts.has('japanese')) {
-      return 'japanese';
-    }
-    if (mainLanguage === 'ko' && detectedScripts.has('korean')) {
-      return 'korean';
-    }
-    if (mainLanguage === 'zh' && detectedScripts.has('chinese')) {
+  function getCjkPdfLanguageContext(fontContext) {
+    return {
+      detectedScripts: new Set(
+        fontContext && Array.isArray(fontContext.detectedScripts) ? fontContext.detectedScripts : []
+      ),
+      detectedLanguages: fontContext && Array.isArray(fontContext.detectedLanguages)
+        ? fontContext.detectedLanguages
+        : [],
+      mainLanguage: fontContext && fontContext.mainLanguage ? fontContext.mainLanguage : ''
+    };
+  }
+
+  function resolveCjkScriptFromMainLanguage(context) {
+    const languageMap = { ja: 'japanese', ko: 'korean', zh: 'chinese' };
+    const script = languageMap[context.mainLanguage];
+    return script && context.detectedScripts.has(script) ? script : '';
+  }
+
+  function resolveCjkScriptFromDetectedLanguages(context) {
+    const languageChecks = [
+      ['ja', 'japanese'],
+      ['ko', 'korean'],
+      ['zh', 'chinese']
+    ];
+    const match = languageChecks.find(([language, script]) => {
+      return context.detectedLanguages.indexOf(language) !== -1 && context.detectedScripts.has(script);
+    });
+    return match ? match[1] : '';
+  }
+
+  function resolveCjkScriptFromDetectedScripts(context) {
+    const scripts = context.detectedScripts;
+    if (scripts.has('chinese') && !scripts.has('japanese')) {
       return 'chinese';
     }
-    if (detectedLanguages.indexOf('ja') !== -1 && detectedScripts.has('japanese')) {
+    if (scripts.has('japanese') && !scripts.has('chinese')) {
       return 'japanese';
     }
-    if (detectedLanguages.indexOf('ko') !== -1 && detectedScripts.has('korean')) {
-      return 'korean';
-    }
-    if (detectedLanguages.indexOf('zh') !== -1 && detectedScripts.has('chinese')) {
-      return 'chinese';
-    }
-    if (detectedScripts.has('chinese') && !detectedScripts.has('japanese')) {
-      return 'chinese';
-    }
-    if (detectedScripts.has('japanese') && !detectedScripts.has('chinese')) {
-      return 'japanese';
-    }
-    if (detectedScripts.has('chinese')) {
-      return 'chinese';
-    }
-    if (detectedScripts.has('japanese')) {
-      return 'japanese';
-    }
-    if (detectedScripts.has('korean')) {
-      return 'korean';
-    }
-    return '';
+    return ['chinese', 'japanese', 'korean'].find((script) => scripts.has(script)) || '';
   }
 
   function splitGraphemes(text) {
@@ -7153,6 +8861,9 @@ Licenses:
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
+    if (platform === 'gemini') {
+      logGeminiThreadInjection('observer', 'MutationObserver started');
+    }
   }
 
   function startViewportWatcher() {
