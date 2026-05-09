@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.1.1
+// @version      1.1.2
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -216,6 +216,10 @@ Licenses:
   const GEMINI_MENU_BUTTON_SELECTOR =
     'button[data-test-id="more-menu-button"], button[data-test-id="conversation-actions-menu-icon-button"]';
   const GEMINI_HEADER_SELECTOR = '.buttons-container.share';
+  const GEMINI_UPSELL_SELECTOR =
+    '.adv-upsell, g1-dynamic-upsell-button, [data-test-id*="upsell" i], [data-test-id*="upgrade" i], button[data-test-id="bard-g1-dynamic-upsell-menu-button"]';
+  const GEMINI_NON_CONVERSATION_ACTION_SELECTOR =
+    '[data-test-id*="install" i], [aria-label*="Install" i], [aria-label*="Installer" i]';
   const GEMINI_THREAD_EXPORT_ATTR = 'data-omni-export-gemini-thread';
   const GEMINI_THREAD_NATIVE_ATTR = 'data-omni-gemini-native-thread';
   const GEMINI_THREAD_FALLBACK_ATTR = 'data-omni-gemini-thread-fallback';
@@ -225,6 +229,7 @@ Licenses:
   const CLAUDE_ACTIONS_SELECTOR = '[role="group"][aria-label="Message actions"]';
   const CLAUDE_COPY_SELECTOR = '[data-testid="action-bar-copy"], button[aria-label="Copy"]';
   const CLAUDE_TURN_EXPORT_ATTR = 'data-omni-export-claude-turn';
+  const CLAUDE_TOOLTIP_DELAY_MS = 168.043;
   const DEEPSEEK_ACTIONS_SELECTOR = 'div.ds-flex._0a3d93b';
   const DEEPSEEK_GROUP_SELECTOR = 'div.ds-flex._965abe9';
   const DEEPSEEK_ROLE_BUTTON_SELECTOR = '[role="button"]';
@@ -236,6 +241,9 @@ Licenses:
   const DEEPSEEK_THREAD_BUTTON_SELECTOR =
     'div._57370c5._5dedc1e.ds-icon-button.ds-icon-button--l.ds-icon-button--sizing-container[role="button"]';
   const DEEPSEEK_THREAD_EXPORT_ATTR = 'data-omni-export-deepseek-thread';
+  const DEEPSEEK_SCROLL_SETTLE_MS = 70;
+  const DEEPSEEK_SCROLL_RESTORE_SETTLE_MS = 120;
+  const DEEPSEEK_SCROLL_STEP_MULTIPLIER = 1.35;
   const MENU_CLASS = 'omni-exporter-menu';
   const MENU_ITEM_CLASS = 'omni-exporter-menu-item';
   const MENU_OPEN_CLASS = 'omni-exporter-menu-open';
@@ -388,6 +396,13 @@ Licenses:
         'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf'
       ]
     },
+    syriac: {
+      family: 'NotoSansSyriac',
+      file: 'NotoSansSyriac-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSyriac/NotoSansSyriac-Regular.ttf'
+      ]
+    },
     devanagari: {
       family: 'Hind',
       file: 'Hind-Regular.ttf',
@@ -493,6 +508,27 @@ Licenses:
         'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansHebrew/NotoSansHebrew-Regular.ttf'
       ]
     },
+    canadianAboriginal: {
+      family: 'NotoSansCanadianAboriginal',
+      file: 'NotoSansCanadianAboriginal-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansCanadianAboriginal/NotoSansCanadianAboriginal-Regular.ttf'
+      ]
+    },
+    tangut: {
+      family: 'NotoSerifTangut',
+      file: 'NotoSerifTangut-Regular.otf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/unhinted/otf/NotoSerifTangut/NotoSerifTangut-Regular.otf'
+      ]
+    },
+    avestan: {
+      family: 'NotoSansAvestan',
+      file: 'NotoSansAvestan-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansAvestan/NotoSansAvestan-Regular.ttf'
+      ]
+    },
     armenian: {
       family: 'NotoSansArmenian',
       file: 'NotoSansArmenian-Regular.ttf',
@@ -530,6 +566,7 @@ Licenses:
     japanese: /[\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF]/u,
     korean: /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/u,
     arabic: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/u,
+    syriac: /[\u0700-\u074F\u0860-\u086F]/u,
     devanagari: /[\u0900-\u097F\uA8E0-\uA8FF]/u,
     bengali: /[\u0980-\u09FF]/u,
     gurmukhi: /[\u0A00-\u0A7F]/u,
@@ -548,6 +585,9 @@ Licenses:
     khmer: /[\u1780-\u17FF\u19E0-\u19FF]/u,
     armenian: /[\u0530-\u058F\uFB13-\uFB17]/u,
     hebrew: /[\u0590-\u05FF\uFB1D-\uFB4F]/u,
+    canadianAboriginal: /[\u1400-\u167F\u18B0-\u18FF\u{11AB0}-\u{11ABF}]/u,
+    tangut: /[\u{17000}-\u{187FF}\u{18800}-\u{18AFF}\u{18D00}-\u{18D8F}]/u,
+    avestan: /[\u{10B00}-\u{10B3F}]/u,
     egyptianHieroglyphs: /[\u{13000}-\u{1345F}]/u,
     greek: /[\u0370-\u03FF\u1F00-\u1FFF]/u,
     cyrillic: /[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]/u
@@ -556,6 +596,7 @@ Licenses:
     'symbolsText',
     'latinExtended',
     'arabic',
+    'syriac',
     'devanagari',
     'bengali',
     'gurmukhi',
@@ -571,6 +612,9 @@ Licenses:
     'myanmar',
     'khmer',
     'hebrew',
+    'canadianAboriginal',
+    'tangut',
+    'avestan',
     'armenian',
     'georgian',
     'ethiopic',
@@ -585,6 +629,7 @@ Licenses:
     japanese: 'Japanese font',
     korean: 'Korean font',
     arabic: 'Arabic font',
+    syriac: 'Assyrian / Syriac font',
     devanagari: 'Devanagari font',
     bengali: 'Bengali font',
     gurmukhi: 'Gurmukhi font',
@@ -600,6 +645,9 @@ Licenses:
     myanmar: 'Myanmar font',
     khmer: 'Khmer font',
     hebrew: 'Hebrew font',
+    canadianAboriginal: 'Inuktut syllabics font',
+    tangut: 'Tangut font',
+    avestan: 'Avestan font',
     armenian: 'Armenian font',
     georgian: 'Georgian font',
     ethiopic: 'Amharic / Ethiopic font',
@@ -613,6 +661,7 @@ Licenses:
     japanese: 'ja',
     korean: 'ko',
     arabic: 'ar',
+    syriac: 'aii',
     devanagari: 'hi',
     bengali: 'bn',
     gurmukhi: 'pa',
@@ -628,6 +677,9 @@ Licenses:
     myanmar: 'my',
     khmer: 'km',
     hebrew: 'he',
+    canadianAboriginal: 'iu',
+    tangut: 'txg',
+    avestan: 'ae',
     armenian: 'hy',
     georgian: 'ka',
     ethiopic: 'am',
@@ -639,6 +691,7 @@ Licenses:
     'korean',
     'chinese',
     'arabic',
+    'syriac',
     'devanagari',
     'bengali',
     'gurmukhi',
@@ -654,6 +707,9 @@ Licenses:
     'myanmar',
     'khmer',
     'hebrew',
+    'canadianAboriginal',
+    'tangut',
+    'avestan',
     'armenian',
     'georgian',
     'ethiopic',
@@ -663,6 +719,7 @@ Licenses:
   ];
   const PDF_SCRIPT_FONT_RETRY_ORDER = [
     'arabic',
+    'syriac',
     'devanagari',
     'bengali',
     'gurmukhi',
@@ -678,6 +735,9 @@ Licenses:
     'myanmar',
     'khmer',
     'hebrew',
+    'canadianAboriginal',
+    'tangut',
+    'avestan',
     'ethiopic',
     'armenian',
     'georgian',
@@ -689,16 +749,38 @@ Licenses:
   const PDF_HAN_PATTERN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u;
   const PDF_CJK_SYMBOL_PATTERN = /[\u3000-\u303F\uFF00-\uFFEF]/u;
   const PDF_SYMBOL_TEXT_PATTERN = /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
+  const PDF_NON_CJK_SYMBOL_TEXT_PATTERN = /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
   const PDF_EMOJI_STYLE_PATTERN = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u{FE0F}|\u{20E3}|\u{200D}|[\u{1F100}-\u{1F2FF}])/u;
-  const PDF_SAFE_SEGMENTATION_SCRIPTS = [];
+  const PDF_SAFE_SEGMENTATION_SCRIPTS = [
+    'arabic',
+    'syriac',
+    'devanagari',
+    'bengali',
+    'gurmukhi',
+    'gujarati',
+    'odia',
+    'tamil',
+    'telugu',
+    'kannada',
+    'malayalam',
+    'sinhala',
+    'thai',
+    'lao',
+    'myanmar',
+    'khmer',
+    'hebrew',
+    'canadianAboriginal'
+  ];
   const PDF_LATIN_COMBINING_MARK_PATTERN = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF]/u;
   const PDF_TOKEN_BREAK_PATTERN = /[\s\u0000-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u2000-\u206F\u3000-\u303F]/u;
   const PDF_LANGUAGE_CODE_MAP = {
     amh: 'am',
     afr: 'af',
+    aii: 'aii',
     ara: 'ar',
     arb: 'ar',
     arm: 'hy',
+    ave: 'ae',
     ben: 'bn',
     bul: 'bg',
     cat: 'ca',
@@ -718,6 +800,7 @@ Licenses:
     hin: 'hi',
     hrv: 'hr',
     hun: 'hu',
+    iku: 'iu',
     ind: 'id',
     ita: 'it',
     jav: 'jv',
@@ -749,10 +832,13 @@ Licenses:
     spa: 'es',
     srp: 'sr',
     sin: 'si',
+    syc: 'aii',
+    syr: 'aii',
     swe: 'sv',
     tam: 'ta',
     tel: 'te',
     tha: 'th',
+    txg: 'txg',
     tur: 'tr',
     ukr: 'uk',
     urd: 'ur',
@@ -887,6 +973,91 @@ let pdfMakeRef = null;
 .omni-exporter-btn[data-omni-scope="thread"]:hover {
   background-color: var(--token-bg-secondary);
   border-radius: 8px;
+}
+
+.omni-exporter-gemini-native-icon {
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.omni-exporter-gemini-native-icon::before {
+  display: none !important;
+}
+
+.omni-exporter-gemini-native-icon:focus-visible {
+  outline: 2px solid rgba(26, 115, 232, 0.55) !important;
+  outline-offset: 2px !important;
+}
+
+.omni-exporter-gemini-native-icon-inner {
+  pointer-events: none !important;
+}
+
+.omni-exporter-gemini-native-icon .icon {
+  display: block;
+}
+
+[data-omni-gemini-turn-host] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+}
+
+[data-omni-gemini-turn-host] + * {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] {
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  padding: 0 !important;
+  margin: -2px !important;
+  border-radius: 50% !important;
+  line-height: 40px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  color: var(--omni-gemini-turn-color, rgb(162, 169, 176)) !important;
+}
+
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-persistent-ripple,
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-ripple,
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-ripple,
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-touch-target {
+  width: 40px !important;
+  height: 40px !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+}
+
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-persistent-ripple.mdc-button__ripple {
+  transform: scale(0.85) !important;
+  transform-origin: center !important;
+}
+
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] mat-icon {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  font-size: 20px !important;
+  line-height: 20px !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--omni-gemini-turn-color, rgb(162, 169, 176)) !important;
 }
 
 .omni-exporter-btn[data-omni-export-claude-turn] {
@@ -1311,6 +1482,12 @@ let pdfMakeRef = null;
       const roots = Array.from(pendingScanRoots);
       pendingScanRoots.clear();
 
+      if (platform === 'gemini') {
+        attachGeminiThreadButton(document);
+        roots.forEach((root) => attachGeminiTurnButtons(root));
+        return;
+      }
+
       if (roots.length > 50) {
         attachButtons(document);
       } else {
@@ -1522,6 +1699,7 @@ let pdfMakeRef = null;
       insertNewGeminiTurnButton(context);
       return;
     }
+    syncGeminiTurnButtonColor(context.existingButton, context.referenceButton);
     repositionGeminiTurnButton(context);
   }
 
@@ -1534,6 +1712,7 @@ let pdfMakeRef = null;
       referenceButton,
       moreMenuBlock: getGeminiTurnMenuBlock(container),
       shareAnchor: shareButton ? shareButton.closest('.tooltip-anchor-point') : null,
+      referenceActionHost: getGeminiTurnNativeActionHost(referenceButton),
       referenceAnchor: referenceButton ? referenceButton.closest('.tooltip-anchor-point') : null,
       existingButton: null,
       existingNative: false
@@ -1559,7 +1738,12 @@ let pdfMakeRef = null;
   }
 
   function removeStaleGeminiNativeTurnButton(context) {
-    if (!context.existingNative || !isStaleGeminiTurnButton(context.existingButton, context.referenceButton)) {
+    if (!context.existingNative) {
+      return false;
+    }
+    const staleButton = isStaleGeminiTurnButton(context.existingButton, context.referenceButton);
+    const staleHost = isStaleGeminiTurnHost(context);
+    if (!staleButton && !staleHost) {
       return false;
     }
     const staleWrapper = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
@@ -1572,8 +1756,25 @@ let pdfMakeRef = null;
     return true;
   }
 
+  function isStaleGeminiTurnHost(context) {
+    if (!context || !context.existingButton || !context.referenceActionHost) {
+      return false;
+    }
+    const currentHost = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`);
+    if (!currentHost) {
+      return true;
+    }
+    return currentHost.hasAttribute('style') ||
+      currentHost.tagName.toLowerCase() !== 'copy-button' ||
+      hasGeminiRuntimeMarkerOnSelf(currentHost);
+  }
+
   function insertNewGeminiTurnButton(context) {
     const nativeButton = buildGeminiNativeTurnButton(context.referenceButton);
+    if (context.referenceActionHost) {
+      insertGeminiButtonWithHost(nativeButton, context.referenceActionHost, 'afterend');
+      return;
+    }
     if (context.moreMenuBlock) {
       insertGeminiButtonBeforeMenu(nativeButton, context.moreMenuBlock);
       return;
@@ -1598,15 +1799,30 @@ let pdfMakeRef = null;
   }
 
   function insertGeminiButtonWithHost(button, anchor, position) {
-    const wrapper = anchor.cloneNode(false);
+    const wrapper = createGeminiTurnButtonHost();
     wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
+    normalizeGeminiTurnButtonHost(wrapper);
     wrapper.appendChild(button);
     anchor.insertAdjacentElement(position, wrapper);
+  }
+
+  function createGeminiTurnButtonHost() {
+    return document.createElement('copy-button');
+  }
+
+  function normalizeGeminiTurnButtonHost(wrapper) {
+    if (wrapper && wrapper.removeAttribute) {
+      wrapper.removeAttribute('style');
+    }
   }
 
   function repositionGeminiTurnButton(context) {
     const existingWrapper = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
       context.existingButton.closest('.tooltip-anchor-point');
+    if (context.referenceActionHost) {
+      moveGeminiButtonNearAnchor(context.referenceActionHost, 'afterend', context.referenceActionHost.nextElementSibling, existingWrapper, context.existingButton);
+      return;
+    }
     if (context.moreMenuBlock) {
       moveGeminiButtonBeforeMenu(context.existingButton, existingWrapper, context.moreMenuBlock);
       return;
@@ -1631,8 +1847,9 @@ let pdfMakeRef = null;
   function moveGeminiButtonBeforeMenu(existingButton, existingWrapper, moreMenuBlock) {
     let nodeToPlace = existingWrapper || existingButton;
     if (!existingWrapper && !moreMenuBlock.matches('button')) {
-      const wrapper = moreMenuBlock.cloneNode(false);
+      const wrapper = createGeminiTurnButtonHost();
       wrapper.setAttribute(GEMINI_TURN_HOST_ATTR, 'true');
+      normalizeGeminiTurnButtonHost(wrapper);
       wrapper.appendChild(existingButton);
       nodeToPlace = wrapper;
     }
@@ -1663,9 +1880,32 @@ let pdfMakeRef = null;
     return menuWrapper || moreButton;
   }
 
+  function getGeminiTurnNativeActionHost(referenceButton) {
+    if (!referenceButton || !referenceButton.closest) {
+      return null;
+    }
+    const host = referenceButton.closest('copy-button, regenerate-button, thumb-up-button, thumb-down-button');
+    if (host && host.closest && host.closest(GEMINI_ACTIONS_SELECTOR)) {
+      return host;
+    }
+    return null;
+  }
+
   function getGeminiTurnReferenceButton(container) {
     if (!container || !container.querySelectorAll) {
       return null;
+    }
+    const preferredSelectors = [
+      'button[data-test-id="copy-button"]',
+      'button[data-test-id="regenerate-button"]',
+      'button[data-test-id="thumb-down-button"]',
+      'button[data-test-id="thumb-up-button"]'
+    ];
+    for (const selector of preferredSelectors) {
+      const preferredButton = container.querySelector(selector);
+      if (preferredButton && !preferredButton.hasAttribute(GEMINI_TURN_EXPORT_ATTR)) {
+        return preferredButton;
+      }
     }
     const buttons = Array.from(container.querySelectorAll('button'));
     if (!buttons.length) {
@@ -1685,6 +1925,25 @@ let pdfMakeRef = null;
     if (!button || !referenceButton) {
       return false;
     }
+    if (button.hasAttribute(GEMINI_TURN_NATIVE_ATTR)) {
+      const ripple = button.querySelector('.mat-mdc-button-persistent-ripple');
+      const icon = button.querySelector('mat-icon');
+      const iconName = icon ? ensureString(icon.getAttribute('data-mat-icon-name') || icon.getAttribute('fonticon') || icon.textContent).trim() : '';
+      const iconText = icon ? ensureString(icon.textContent).trim() : '';
+      return Boolean(
+        button.classList.contains('omni-exporter-gemini-native-icon') ||
+        hasGeminiRuntimeMarkerOnSelf(button) ||
+        button.hasAttribute('aria-haspopup') ||
+        button.hasAttribute('aria-expanded') ||
+        !icon ||
+        !/download/i.test(iconName) ||
+        iconText ||
+        !button.hasAttribute('mat-button') ||
+        !button.classList.contains('mat-mdc-button') ||
+        button.hasAttribute('mat-icon-button') ||
+        (ripple && !ripple.classList.contains('mdc-button__ripple'))
+      );
+    }
     const referenceUsesMenuStyle = referenceButton.matches(GEMINI_MENU_BUTTON_SELECTOR) ||
       referenceButton.classList.contains('more-menu-button') ||
       referenceButton.classList.contains('mat-mdc-button');
@@ -1697,30 +1956,23 @@ let pdfMakeRef = null;
   }
 
   function buildGeminiNativeTurnButton(referenceButton) {
-    const button = referenceButton.cloneNode(true);
+    const button = createGeminiNativeTurnIconButton(referenceButton);
     button.removeAttribute('data-test-id');
     button.removeAttribute('aria-describedby');
     button.removeAttribute('cdk-describedby-host');
     button.removeAttribute('jslog');
+    button.removeAttribute('role');
+    button.removeAttribute('disabled');
+    button.removeAttribute('aria-disabled');
     button.setAttribute('type', 'button');
-    button.setAttribute('aria-label', 'Exporter ce chat');
+    button.setAttribute('aria-label', 'Export');
+    removeGeminiTooltipAttributes(button);
     button.setAttribute(EXPORT_SCOPE_ATTR, 'turn');
     button.setAttribute(GEMINI_TURN_EXPORT_ATTR, 'true');
     button.setAttribute(GEMINI_TURN_NATIVE_ATTR, 'true');
-    button.setAttribute('aria-haspopup', 'menu');
-    button.setAttribute('aria-expanded', 'false');
-
-    const matIcon = button.querySelector('mat-icon');
-    if (matIcon) {
-      while (matIcon.firstChild) {
-        matIcon.removeChild(matIcon.firstChild);
-      }
-      matIcon.removeAttribute('fonticon');
-      matIcon.removeAttribute('data-mat-icon-name');
-      matIcon.appendChild(buildExportIconElement());
-    } else {
-      button.appendChild(buildExportIconElement());
-    }
+    button.removeAttribute('aria-haspopup');
+    button.removeAttribute('aria-expanded');
+    syncGeminiTurnButtonColor(button, referenceButton);
 
     button.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1731,9 +1983,46 @@ let pdfMakeRef = null;
     return button;
   }
 
+  function removeGeminiTooltipAttributes(button) {
+    [
+      'mattooltip',
+      'mattooltipclass',
+      'mattooltipposition',
+      'mattooltipshowdelay',
+      'mattooltiphidedelay',
+      'ng-reflect-message',
+      'ng-reflect-position',
+      'ng-reflect-show-delay',
+      'ng-reflect-hide-delay',
+      'aria-describedby',
+      'cdk-describedby-host'
+    ].forEach((attribute) => {
+      button.removeAttribute(attribute);
+    });
+  }
+
+  function syncGeminiTurnButtonColor(button, referenceButton) {
+    if (!button || !button.style || !referenceButton || !window.getComputedStyle) {
+      return;
+    }
+    const referenceIcon = referenceButton.querySelector ? referenceButton.querySelector('mat-icon') : null;
+    const referenceColor = getComputedStyle(referenceIcon || referenceButton).color;
+    if (referenceColor) {
+      button.style.setProperty('--omni-gemini-turn-color', referenceColor);
+    }
+  }
+
   function attachGeminiThreadButton(root) {
+    if (!hasActiveGeminiThreadContext()) {
+      removeGeminiThreadButtons('no-active-conversation');
+      return;
+    }
     const anchor = findGeminiThreadAnchor(root);
     let existingButton = getPrimaryGeminiThreadButton();
+    if (existingButton && isStaleGeminiNativeThreadButton(existingButton)) {
+      existingButton.remove();
+      existingButton = null;
+    }
     const existingIsNative = existingButton && existingButton.hasAttribute(GEMINI_THREAD_NATIVE_ATTR);
     const existingIsFallback = existingButton && existingButton.hasAttribute(GEMINI_THREAD_FALLBACK_ATTR);
 
@@ -1777,6 +2066,48 @@ let pdfMakeRef = null;
     return buttons[0] || null;
   }
 
+  function removeGeminiThreadButtons(reason) {
+    const buttons = Array.from(document.querySelectorAll(`[${GEMINI_THREAD_EXPORT_ATTR}]`));
+    if (!buttons.length) {
+      return;
+    }
+    buttons.forEach((button) => button.remove());
+    logGeminiThreadInjection('removed', reason || 'thread button is not valid here');
+  }
+
+  function hasActiveGeminiThreadContext() {
+    const conversations = Array.from(document.querySelectorAll(GEMINI_CONVERSATION_SELECTOR));
+    if (conversations.some(hasExportableGeminiConversationContent)) {
+      return true;
+    }
+    const main = document.querySelector('main') || document.body;
+    if (main && main.querySelector('user-query, user-query-content, model-response, message-content')) {
+      return Boolean(normalizeText(main.textContent || '') || nodeHasExportableImages(main));
+    }
+    return Boolean(getGeminiConversationIdFromLocation());
+  }
+
+  function hasExportableGeminiConversationContent(conversation) {
+    if (!conversation || !conversation.isConnected) {
+      return false;
+    }
+    if (getGeminiRootsFromConversation(conversation).length) {
+      return true;
+    }
+    return Boolean(normalizeText(conversation.textContent || '') || nodeHasExportableImages(conversation));
+  }
+
+  function getGeminiConversationIdFromLocation() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    if (parts[0] !== 'app' || !parts[1]) {
+      return '';
+    }
+    if (/^(new|settings|extensions|updates|privacy|about|gems|library|explore)$/i.test(parts[1])) {
+      return '';
+    }
+    return parts[1].length >= 8 ? parts[1] : '';
+  }
+
   function findGeminiThreadAnchor(root) {
     const scope = root && root.querySelectorAll ? root : document;
     const candidates = [];
@@ -1785,10 +2116,7 @@ let pdfMakeRef = null;
       if (!isSafeGeminiThreadAnchor(container)) {
         return;
       }
-      const referenceButton =
-        container.querySelector(GEMINI_THREAD_SHARE_BUTTON_SELECTOR) ||
-        container.querySelector('button[aria-label*="Share"], button[aria-label*="Partager"]') ||
-        container.querySelector('button');
+      const referenceButton = getGeminiThreadReferenceButton(container);
       if (!referenceButton || !isSafeGeminiThreadAnchor(referenceButton)) {
         return;
       }
@@ -1855,6 +2183,8 @@ let pdfMakeRef = null;
       return false;
     }
     if (element.closest && element.closest([
+      GEMINI_UPSELL_SELECTOR,
+      GEMINI_NON_CONVERSATION_ACTION_SELECTOR,
       GEMINI_ACTIONS_SELECTOR,
       GEMINI_CONVERSATION_SELECTOR,
       'model-response',
@@ -1869,14 +2199,43 @@ let pdfMakeRef = null;
     if (element.hasAttribute && element.hasAttribute('hidden')) {
       return false;
     }
-    try {
-      const style = window.getComputedStyle(element);
-      if (style && (style.display === 'none' || style.visibility === 'hidden')) {
-        return false;
-      }
-    } catch (err) {
-    }
     return true;
+  }
+
+  function getGeminiThreadReferenceButton(container) {
+    if (!container || !container.querySelectorAll) {
+      return null;
+    }
+    const preferredSelectors = [
+      GEMINI_THREAD_SHARE_BUTTON_SELECTOR,
+      'button[aria-label*="Share"], button[aria-label*="Partager"]',
+      GEMINI_MENU_BUTTON_SELECTOR,
+      'button.mat-mdc-icon-button'
+    ];
+    for (const selector of preferredSelectors) {
+      const button = Array.from(container.querySelectorAll(selector)).find(isUsableGeminiThreadReferenceButton);
+      if (button) {
+        return button;
+      }
+    }
+    return Array.from(container.querySelectorAll('button')).find(isUsableGeminiThreadReferenceButton) || null;
+  }
+
+  function isUsableGeminiThreadReferenceButton(button) {
+    if (!button || button.hasAttribute(GEMINI_THREAD_EXPORT_ATTR)) {
+      return false;
+    }
+    if (button.closest && button.closest(GEMINI_UPSELL_SELECTOR)) {
+      return false;
+    }
+    if (button.matches && button.matches(GEMINI_NON_CONVERSATION_ACTION_SELECTOR)) {
+      return false;
+    }
+    const text = ensureString(button.textContent).trim();
+    if (/Google AI|Plus|Pro|Upgrade|Passez|Mettre à niveau|Install|Installer/i.test(text)) {
+      return false;
+    }
+    return isSafeGeminiThreadAnchor(button);
   }
 
   function placeGeminiThreadButton(button, anchor) {
@@ -1914,31 +2273,35 @@ let pdfMakeRef = null;
     console.info(`OmniChat Gemini thread export: ${state}`, detail || '');
   }
 
+  function isStaleGeminiNativeThreadButton(button) {
+    if (!button || !button.hasAttribute(GEMINI_THREAD_NATIVE_ATTR)) {
+      return false;
+    }
+    const text = ensureString(button.textContent).trim();
+    return Boolean(
+      button.querySelector('.dynamic-upsell-label, .mdc-button__label') ||
+      button.closest(GEMINI_UPSELL_SELECTOR) ||
+      /Google AI|Plus|Pro|Upgrade|Passez|Mettre à niveau|Install|Installer/i.test(text)
+    );
+  }
+
   function buildGeminiNativeThreadButton(referenceButton) {
-    const button = referenceButton.cloneNode(true);
+    const button = createGeminiNativeThreadIconButton(referenceButton);
     button.removeAttribute('data-test-id');
     button.removeAttribute('aria-describedby');
     button.removeAttribute('cdk-describedby-host');
     button.removeAttribute('jslog');
+    button.removeAttribute('role');
+    button.removeAttribute('disabled');
+    button.removeAttribute('aria-disabled');
     button.setAttribute('type', 'button');
-    button.setAttribute('aria-label', 'Exporter la conversation');
+    button.setAttribute('aria-label', 'Export');
+    removeGeminiTooltipAttributes(button);
     button.setAttribute(EXPORT_SCOPE_ATTR, 'thread');
     button.setAttribute(GEMINI_THREAD_EXPORT_ATTR, 'true');
     button.setAttribute(GEMINI_THREAD_NATIVE_ATTR, 'true');
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
-
-    const matIcon = button.querySelector('mat-icon');
-    if (matIcon) {
-      while (matIcon.firstChild) {
-        matIcon.removeChild(matIcon.firstChild);
-      }
-      matIcon.removeAttribute('fonticon');
-      matIcon.removeAttribute('data-mat-icon-name');
-      matIcon.appendChild(buildExportIconElement());
-    } else {
-      button.appendChild(buildExportIconElement());
-    }
 
     button.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1947,6 +2310,162 @@ let pdfMakeRef = null;
     });
 
     return button;
+  }
+
+  function createGeminiNativeTurnIconButton() {
+    const button = document.createElement('button');
+    button.className = 'mdc-button mat-mdc-button-base mat-mdc-tooltip-trigger icon-button mat-mdc-button mat-unthemed';
+    button.setAttribute('mat-button', '');
+    button.setAttribute('tabindex', '0');
+    button.setAttribute('mat-ripple-loader-class-name', 'mat-mdc-button-ripple');
+    button.appendChild(createGeminiTurnButtonPart('span', 'mat-mdc-button-persistent-ripple mdc-button__ripple'));
+    button.appendChild(createGeminiTurnDownloadIcon());
+    button.appendChild(createGeminiTurnButtonPart('span', 'mdc-button__label'));
+    button.appendChild(createGeminiTurnButtonPart('span', 'mat-focus-indicator'));
+    button.appendChild(createGeminiTurnButtonPart('span', 'mat-mdc-button-touch-target'));
+    button.appendChild(createGeminiTurnButtonPart('span', 'mat-ripple mat-mdc-button-ripple'));
+    return button;
+  }
+
+  function createGeminiNativeThreadIconButton(referenceButton) {
+    const button = referenceButton && referenceButton.matches && referenceButton.matches('button')
+      ? referenceButton.cloneNode(true)
+      : document.createElement('button');
+    if (!referenceButton || !referenceButton.matches || !referenceButton.matches('button')) {
+      applyGeminiNativeButtonVisuals(button, referenceButton);
+    }
+    button.classList.add('omni-exporter-gemini-native-icon');
+    removeGeminiClonedButtonExtras(button);
+    replaceGeminiNativeExportIcon(button, referenceButton);
+    return button;
+  }
+
+  function applyGeminiNativeButtonVisuals(button, referenceButton) {
+    const fallbackClassName = 'mdc-button mat-mdc-button-base mat-mdc-tooltip-trigger icon-button mat-mdc-button mat-unthemed ng-star-inserted';
+    const referenceClassName = referenceButton && typeof referenceButton.className === 'string'
+      ? referenceButton.className
+      : '';
+    button.className = `${referenceClassName || fallbackClassName} omni-exporter-gemini-native-icon`
+      .replace(/\bmat-mdc-menu-trigger\b/g, '')
+      .replace(/\bmore-menu-button\b/g, '')
+      .replace(/\brefresh-icon\b/g, '')
+      .replace(/\bembedded-copy-icon\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (isGeminiTextIconButtonReference(referenceButton)) {
+      button.setAttribute('mat-button', '');
+      button.setAttribute('tabindex', '0');
+    } else {
+      button.setAttribute('mat-icon-button', '');
+      button.setAttribute('mat-ripple-loader-centered', '');
+    }
+    button.setAttribute('mat-ripple-loader-class-name', 'mat-mdc-button-ripple');
+  }
+
+  function removeGeminiClonedButtonExtras(button) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    button.querySelectorAll('[lottie-animation], .thumb-animation, .regenerate-animation').forEach((node) => node.remove());
+  }
+
+  function createGeminiTurnButtonPart(tagName, className) {
+    const part = document.createElement(tagName);
+    part.className = className;
+    return part;
+  }
+
+  function createGeminiTurnDownloadIcon() {
+    const matIcon = document.createElement('mat-icon');
+    matIcon.setAttribute('role', 'img');
+    matIcon.setAttribute('fonticon', 'download');
+    matIcon.className = 'mat-icon notranslate embedded-copy-icon gds-icon-l google-symbols mat-ligature-font mat-icon-no-color';
+    matIcon.setAttribute('aria-hidden', 'true');
+    matIcon.setAttribute('data-mat-icon-type', 'font');
+    matIcon.setAttribute('data-mat-icon-name', 'download');
+    return matIcon;
+  }
+
+  function hasGeminiRuntimeMarkerOnSelf(node) {
+    if (!node) {
+      return false;
+    }
+    if (node.attributes && Array.from(node.attributes).some((attribute) => /^_ng(?:content|host)-/i.test(attribute.name) || /^ng-/i.test(attribute.name))) {
+      return true;
+    }
+    return Boolean(node.classList && Array.from(node.classList).some((className) => /^ng-/.test(className)));
+  }
+
+  function replaceGeminiNativeExportIcon(button, referenceButton) {
+    if (!button || !button.querySelector) {
+      return;
+    }
+    const matIcon = button.querySelector('mat-icon');
+    if (matIcon) {
+      while (matIcon.firstChild) {
+        matIcon.removeChild(matIcon.firstChild);
+      }
+      matIcon.removeAttribute('fonticon');
+      matIcon.removeAttribute('data-mat-icon-name');
+      matIcon.appendChild(buildExportIconElement());
+      return;
+    }
+    appendGeminiNativeExportIconFallback(button, referenceButton);
+  }
+
+  function appendGeminiNativeExportIconFallback(button, referenceButton) {
+    const persistentRipple = document.createElement('span');
+    persistentRipple.className = isGeminiTextIconButtonReference(referenceButton)
+      ? 'mat-mdc-button-persistent-ripple mdc-button__ripple'
+      : 'mat-mdc-button-persistent-ripple mdc-icon-button__ripple';
+    button.appendChild(persistentRipple);
+
+    const matIcon = document.createElement('mat-icon');
+    const referenceIcon = referenceButton && referenceButton.querySelector
+      ? referenceButton.querySelector('mat-icon')
+      : null;
+    matIcon.setAttribute('role', 'img');
+    matIcon.className = referenceIcon && typeof referenceIcon.className === 'string'
+      ? referenceIcon.className
+          .replace(/\brefresh-icon\b/g, '')
+          .replace(/\bembedded-copy-icon\b/g, '')
+          .replace(/\bicon-filled\b/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : 'mat-icon notranslate gds-icon-m google-symbols mat-ligature-font mat-icon-no-color ng-star-inserted';
+    matIcon.setAttribute('aria-hidden', 'true');
+    matIcon.setAttribute('data-mat-icon-type', 'font');
+    matIcon.appendChild(buildExportIconElement());
+    button.appendChild(matIcon);
+
+    if (isGeminiTextIconButtonReference(referenceButton)) {
+      const label = document.createElement('span');
+      label.className = 'mdc-button__label';
+      button.appendChild(label);
+    }
+
+    const focusIndicator = document.createElement('span');
+    focusIndicator.className = 'mat-focus-indicator';
+    button.appendChild(focusIndicator);
+
+    const touchTarget = document.createElement('span');
+    touchTarget.className = 'mat-mdc-button-touch-target';
+    button.appendChild(touchTarget);
+
+    const ripple = document.createElement('span');
+    ripple.className = 'mat-ripple mat-mdc-button-ripple';
+    button.appendChild(ripple);
+  }
+
+  function isGeminiTextIconButtonReference(referenceButton) {
+    if (!referenceButton) {
+      return true;
+    }
+    return Boolean(
+      referenceButton.hasAttribute('mat-button') ||
+      referenceButton.classList.contains('mdc-button') ||
+      referenceButton.classList.contains('mat-mdc-button')
+    ) && !referenceButton.classList.contains('mdc-icon-button');
   }
 
   function attachGrokThreadButton(root) {
@@ -2042,7 +2561,18 @@ let pdfMakeRef = null;
   function attachClaudeTooltip(wrapper, button, label) {
     let tooltipEl = null;
     let tooltipId = null;
+    let showTimer = null;
+
+    const clearShowTimer = () => {
+      if (!showTimer) {
+        return;
+      }
+      window.clearTimeout(showTimer);
+      showTimer = null;
+    };
+
     const show = () => {
+      showTimer = null;
       if (tooltipEl) {
         return;
       }
@@ -2086,10 +2616,18 @@ let pdfMakeRef = null;
       const rect = button.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
       const y = rect.bottom;
-      popperWrapper.style.transform = `translate(${Math.round(x)}px, ${Math.round(y + 8)}px) translate(-50%, 0)`;
+      popperWrapper.style.transform = `translate(${Math.round(x)}px, ${Math.round(y + 4)}px) translate(-50%, 0)`;
+    };
+
+    const scheduleShow = () => {
+      if (tooltipEl || showTimer) {
+        return;
+      }
+      showTimer = window.setTimeout(show, CLAUDE_TOOLTIP_DELAY_MS);
     };
 
     const hide = () => {
+      clearShowTimer();
       wrapper.setAttribute('data-state', 'closed');
       wrapper.removeAttribute('aria-describedby');
       if (tooltipEl) {
@@ -2099,9 +2637,9 @@ let pdfMakeRef = null;
       }
     };
 
-    wrapper.addEventListener('mouseenter', show);
+    wrapper.addEventListener('mouseenter', scheduleShow);
     wrapper.addEventListener('mouseleave', hide);
-    button.addEventListener('focus', show);
+    button.addEventListener('focus', scheduleShow);
     button.addEventListener('blur', hide);
   }
 
@@ -2147,8 +2685,125 @@ let pdfMakeRef = null;
         tagName: 'div'
       });
       button.setAttribute(DEEPSEEK_EXPORT_ATTR, 'true');
+      button.setAttribute('aria-label', 'Export');
+      attachDeepSeekTurnTooltip(button);
       group.appendChild(button);
     });
+  }
+
+  function attachDeepSeekTurnTooltip(button) {
+    let container = null;
+    let wrapper = null;
+    let cleanup = null;
+
+    const hide = () => {
+      if (cleanup) {
+        cleanup();
+        cleanup = null;
+      }
+      if (container) {
+        container.remove();
+        container = null;
+        wrapper = null;
+      }
+      button.removeAttribute('aria-describedby');
+    };
+
+    const show = () => {
+      if (container && wrapper) {
+        positionDeepSeekTurnTooltip(button, wrapper);
+        return;
+      }
+
+      const tooltipId = `omni-deepseek-export-tooltip-${++iconCounter}`;
+      container = document.createElement('div');
+      container.className = 'ds-floating-container';
+      container.style.zIndex = '1024';
+
+      wrapper = document.createElement('div');
+      wrapper.className = 'ds-floating-position-wrapper ds-theme';
+      wrapper.setAttribute('data-transform-origin', 'top');
+      wrapper.id = tooltipId;
+      wrapper.style.zIndex = '1024';
+      applyDeepSeekTooltipTheme(wrapper);
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'ds-tooltip ds-tooltip--s ds-elevated ds-theme';
+      tooltip.setAttribute('role', 'tooltip');
+      applyDeepSeekTooltipTheme(tooltip);
+      tooltip.textContent = 'Export';
+
+      wrapper.appendChild(tooltip);
+      container.appendChild(wrapper);
+      document.body.appendChild(container);
+      button.setAttribute('aria-describedby', tooltipId);
+
+      const reposition = () => {
+        positionDeepSeekTurnTooltip(button, wrapper);
+      };
+      reposition();
+
+      window.addEventListener('scroll', reposition, true);
+      window.addEventListener('resize', reposition, true);
+      cleanup = () => {
+        window.removeEventListener('scroll', reposition, true);
+        window.removeEventListener('resize', reposition, true);
+      };
+    };
+
+    button.addEventListener('mouseenter', show);
+    button.addEventListener('mouseleave', hide);
+    button.addEventListener('focus', show);
+    button.addEventListener('blur', hide);
+    button.addEventListener('mousedown', hide, true);
+  }
+
+  function applyDeepSeekTooltipTheme(element) {
+    if (!element || !element.style) {
+      return;
+    }
+    element.style.setProperty('--ds-rgb-hover', '255 255 255 / 8%');
+    element.style.setProperty('--ds-notification-color', 'var(--dsw-alias-bg-layer-2)');
+    element.style.setProperty('--ds-notification-title-color', 'var(--dsw-alias-label-primary)');
+    element.style.setProperty('--ds-notification-content-color', 'var(--dsw-alias-label-secondary)');
+    element.style.setProperty('--ds-notification-padding', '15px');
+    element.style.setProperty('--ds-notification-corner', '16px');
+    element.style.setProperty('--ds-notification-shadow', '0 0 1px 0 rgba(0, 0, 0, 0.20), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08)');
+    element.style.setProperty('--ds-notification-title-margin', '0 0 8px 0');
+    element.style.setProperty('--ds-notification-footer-margin', '20px 0 0 0');
+    element.style.setProperty('--ds-notification-border', 'var(--dsw-alias-border-inverted)');
+    element.style.setProperty('--ds-notification-title-font-size', '16px');
+    element.style.setProperty('--ds-notification-title-line-height', '24px');
+    element.style.setProperty('--ds-notification-content-font-size', '14px');
+    element.style.setProperty('--ds-notification-content-line-height', '22px');
+    element.style.setProperty('--nds-button-primary-fill', 'var(--dsw-alias-button-primary-fill)');
+    element.style.setProperty('--ds-border-l2', 'var(--dsw-alias-border-l2)');
+  }
+
+  function positionDeepSeekTurnTooltip(button, wrapper) {
+    if (!button || !wrapper) {
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    const tooltipNode = wrapper.firstElementChild || wrapper;
+    const tooltipRect = tooltipNode.getBoundingClientRect();
+    const tooltipWidth = tooltipRect.width || wrapper.getBoundingClientRect().width || 64;
+    const tooltipHeight = tooltipRect.height || wrapper.getBoundingClientRect().height || 28;
+    const padding = 8;
+    let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+    let top = rect.bottom + 4;
+    let origin = 'top';
+
+    left = Math.max(padding, Math.min(window.innerWidth - padding - tooltipWidth, left));
+    if (top + tooltipHeight > window.innerHeight - padding) {
+      top = rect.top - tooltipHeight - 4;
+      origin = 'bottom';
+    }
+    top = Math.max(padding, Math.min(window.innerHeight - padding - tooltipHeight, top));
+
+    wrapper.setAttribute('data-transform-origin', origin);
+    wrapper.style.left = `${left}px`;
+    wrapper.style.top = `${top}px`;
   }
 
   function attachDeepSeekThreadButton(root) {
@@ -2171,7 +2826,9 @@ let pdfMakeRef = null;
         tagName: 'div'
       });
       button.setAttribute(DEEPSEEK_THREAD_EXPORT_ATTR, 'true');
-      button.style.marginRight = '50px';
+      button.setAttribute('aria-label', 'Export');
+      attachDeepSeekTurnTooltip(button);
+      button.style.marginRight = '0px';
       targetButton.insertAdjacentElement('beforebegin', button);
       break;
     }
@@ -2354,7 +3011,8 @@ let pdfMakeRef = null;
     });
 
     const onPointerDown = (event) => {
-      if (menu.contains(event.target) || event.target === button) {
+      const target = event.target;
+      if (menu.contains(target) || (button.contains && button.contains(target))) {
         return;
       }
       closeMenu();
@@ -2382,7 +3040,9 @@ let pdfMakeRef = null;
       window.removeEventListener('scroll', onReposition, true);
     };
 
-    button.setAttribute('aria-expanded', 'true');
+    if (!isGeminiNativeTurnExportButton(button)) {
+      button.setAttribute('aria-expanded', 'true');
+    }
     activeMenu = menu;
     activeMenuButton = button;
   }
@@ -2397,9 +3057,18 @@ let pdfMakeRef = null;
       activeMenu = null;
     }
     if (activeMenuButton) {
-      activeMenuButton.setAttribute('aria-expanded', 'false');
+      if (isGeminiNativeTurnExportButton(activeMenuButton)) {
+        activeMenuButton.removeAttribute('aria-expanded');
+        activeMenuButton.removeAttribute('aria-haspopup');
+      } else {
+        activeMenuButton.setAttribute('aria-expanded', 'false');
+      }
       activeMenuButton = null;
     }
+  }
+
+  function isGeminiNativeTurnExportButton(button) {
+    return Boolean(button && button.hasAttribute && button.hasAttribute(GEMINI_TURN_NATIVE_ATTR));
   }
 
   function appendMenuItemsDOM(menu) {
@@ -3200,7 +3869,7 @@ let pdfMakeRef = null;
       conversation.querySelector('user-query-content') ||
       conversation.querySelector('user-query') ||
       conversation.querySelector('user-query-content .query-content .query-text, user-query-content .query-content, user-query .query-text');
-    if (userRoot && (normalizeText(userRoot.innerText || '') || nodeHasExportableImages(userRoot))) {
+    if (userRoot && (normalizeText(userRoot.textContent || '') || nodeHasExportableImages(userRoot))) {
       roots.push(userRoot);
     }
 
@@ -3209,7 +3878,7 @@ let pdfMakeRef = null;
     )).filter((node, index, self) => !self.some((other, otherIndex) => otherIndex !== index && other.contains(node)));
 
     assistantRoots.forEach((assistantRoot) => {
-      if (normalizeText(assistantRoot.innerText || '') || nodeHasExportableImages(assistantRoot)) {
+      if (normalizeText(assistantRoot.textContent || '') || nodeHasExportableImages(assistantRoot)) {
         roots.push(assistantRoot);
       }
     });
@@ -3383,6 +4052,7 @@ let pdfMakeRef = null;
     const captureVisibleMessages = () => {
       const roots = getDeepSeekMessageRoots();
       const messages = collectMessagesFromTurns(roots);
+      let added = 0;
       messages.forEach((message) => {
         const key = buildDeepSeekCollectedMessageKey(message);
         if (!key || seen.has(key)) {
@@ -3390,7 +4060,9 @@ let pdfMakeRef = null;
         }
         seen.add(key);
         collected.push(message);
+        added += 1;
       });
+      return added;
     };
 
     try {
@@ -3399,26 +4071,27 @@ let pdfMakeRef = null;
 
       let lastTop = -1;
       let stablePasses = 0;
-      const maxPasses = 80;
+      const viewportHeight = getScrollClientHeight(scroller);
+      const step = Math.max(520, Math.floor(viewportHeight * DEEPSEEK_SCROLL_STEP_MULTIPLIER));
+      const maxPasses = Math.min(72, Math.max(14, Math.ceil(getScrollMaxTop(scroller) / Math.max(1, step)) + 12));
       for (let pass = 0; pass < maxPasses; pass += 1) {
-        captureVisibleMessages();
+        const added = captureVisibleMessages();
         const currentTop = getScrollTop(scroller);
         const maxTop = getScrollMaxTop(scroller);
         if (currentTop >= maxTop - 4) {
           break;
         }
-        if (Math.abs(currentTop - lastTop) < 2) {
+        if (Math.abs(currentTop - lastTop) < 2 && added === 0) {
           stablePasses += 1;
         } else {
           stablePasses = 0;
         }
-        if (stablePasses >= 3) {
+        if (stablePasses >= 2) {
           break;
         }
         lastTop = currentTop;
-        const step = Math.max(260, Math.floor(getScrollClientHeight(scroller) * 0.72));
         setScrollTop(scroller, Math.min(maxTop, currentTop + step));
-        await waitForDeepSeekScrollSettle(scroller);
+        await waitForDeepSeekScrollSettle(scroller, { delay: DEEPSEEK_SCROLL_SETTLE_MS, queueScan: false });
       }
       captureVisibleMessages();
       console.info(`OmniChat DeepSeek thread export: collected ${collected.length} message(s)`);
@@ -3428,7 +4101,7 @@ let pdfMakeRef = null;
       if (scroller.style) {
         scroller.style.scrollBehavior = originalBehavior || '';
       }
-      await waitForDeepSeekScrollSettle(scroller);
+      await waitForDeepSeekScrollSettle(scroller, { delay: DEEPSEEK_SCROLL_RESTORE_SETTLE_MS, queueScan: true });
     }
   }
 
@@ -3453,27 +4126,39 @@ let pdfMakeRef = null;
     scopedSelectors.forEach((selector) => {
       document.querySelectorAll(selector).forEach(addCandidate);
     });
-    document.querySelectorAll('div').forEach((node) => {
-      if (node.scrollHeight > node.clientHeight + 80) {
-        addCandidate(node);
-      }
-    });
 
-    return candidates
+    let matches = candidates
       .filter(isDeepSeekConversationScroller)
       .sort((a, b) => {
         const aScore = scoreDeepSeekScroller(a);
         const bScore = scoreDeepSeekScroller(b);
         return bScore - aScore;
-      })[0] || null;
+      });
+    if (matches.length) {
+      return matches[0];
+    }
+
+    document.querySelectorAll('div').forEach((node) => {
+      if (node.scrollHeight > node.clientHeight + 80) {
+        addCandidate(node);
+      }
+    });
+    matches = candidates
+      .filter(isDeepSeekConversationScroller)
+      .sort((a, b) => {
+        const aScore = scoreDeepSeekScroller(a);
+        const bScore = scoreDeepSeekScroller(b);
+        return bScore - aScore;
+      });
+    return matches[0] || null;
   }
 
   async function scrollDeepSeekScrollerToStableTop(scroller, captureVisibleMessages) {
     let lastMaxTop = -1;
     let stableTopPasses = 0;
-    for (let pass = 0; pass < 10; pass += 1) {
+    for (let pass = 0; pass < 7; pass += 1) {
       setScrollTop(scroller, 0);
-      await waitForDeepSeekScrollSettle(scroller);
+      await waitForDeepSeekScrollSettle(scroller, { delay: DEEPSEEK_SCROLL_SETTLE_MS, queueScan: false });
       if (typeof captureVisibleMessages === 'function') {
         captureVisibleMessages();
       }
@@ -3484,7 +4169,7 @@ let pdfMakeRef = null;
       } else {
         stableTopPasses = 0;
       }
-      if (stableTopPasses >= 2) {
+      if (stableTopPasses >= 1) {
         break;
       }
       lastMaxTop = maxTop;
@@ -3569,10 +4254,13 @@ let pdfMakeRef = null;
     return scroller.clientHeight || 600;
   }
 
-  async function waitForDeepSeekScrollSettle(scroller) {
+  async function waitForDeepSeekScrollSettle(scroller, options) {
+    const delay = Math.max(0, Number(options && options.delay) || DEEPSEEK_SCROLL_SETTLE_MS);
     await waitForNextPaint();
-    await waitMs(160);
-    queueScanForNode(scroller);
+    await waitMs(delay);
+    if (!options || options.queueScan !== false) {
+      queueScanForNode(scroller);
+    }
     await waitForNextPaint();
   }
 
@@ -5266,9 +5954,7 @@ let pdfMakeRef = null;
       color: '#1f2937',
       background: '#eef2ff'
     };
-    if (opts.noWrap !== false) {
-      styled.noWrap = true;
-    }
+    styled.noWrap = false;
     if (opts.preserveLeadingSpaces || raw.includes('\n')) {
       styled.preserveLeadingSpaces = true;
     }
@@ -6709,6 +7395,120 @@ let pdfMakeRef = null;
     return normalizeGrokPdfContentNode(content, false);
   }
 
+  function normalizePdfContentForMessageBox(content) {
+    return normalizePdfMessageBoxNode(content, false);
+  }
+
+  function normalizePdfMessageBoxNode(node, inCodeBlock) {
+    if (node === null || node === undefined) {
+      return node;
+    }
+    if (typeof node === 'string') {
+      return inCodeBlock ? addPdfCodeBreakOpportunities(node) : addPdfMessageBreakOpportunities(node);
+    }
+    if (Array.isArray(node)) {
+      return node.map((entry) => normalizePdfMessageBoxNode(entry, inCodeBlock));
+    }
+    if (typeof node !== 'object') {
+      return node;
+    }
+
+    const next = Object.assign({}, node);
+    const thisIsCodeBlock = inCodeBlock || isPdfCodeBlockNode(next);
+    if (Object.prototype.hasOwnProperty.call(next, 'text')) {
+      next.text = normalizePdfMessageTextValue(next.text, thisIsCodeBlock);
+      if (!thisIsCodeBlock) {
+        next.noWrap = false;
+      }
+    }
+    if (Array.isArray(next.stack)) {
+      next.stack = next.stack.map((entry) => normalizePdfMessageBoxNode(entry, thisIsCodeBlock));
+    }
+    if (Array.isArray(next.ul)) {
+      next.ul = next.ul.map((entry) => normalizePdfMessageBoxNode(entry, thisIsCodeBlock));
+    }
+    if (Array.isArray(next.ol)) {
+      next.ol = next.ol.map((entry) => normalizePdfMessageBoxNode(entry, thisIsCodeBlock));
+    }
+    if (Array.isArray(next.columns)) {
+      next.columns = next.columns.map((entry) => normalizePdfMessageBoxNode(entry, thisIsCodeBlock));
+    }
+    if (next.table && Array.isArray(next.table.body)) {
+      next.table = Object.assign({}, next.table, {
+        body: next.table.body.map((row) => {
+          if (!Array.isArray(row)) {
+            return row;
+          }
+          return row.map((cell) => normalizePdfMessageBoxNode(cell, thisIsCodeBlock));
+        })
+      });
+    }
+    return next;
+  }
+
+  function normalizePdfMessageTextValue(value, inCodeBlock) {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return inCodeBlock ? addPdfCodeBreakOpportunities(value) : addPdfMessageBreakOpportunities(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => normalizePdfMessageTextValue(entry, inCodeBlock));
+    }
+    if (typeof value === 'object') {
+      const next = Object.assign({}, value);
+      const nestedCodeBlock = inCodeBlock || isPdfCodeBlockNode(next);
+      if (Object.prototype.hasOwnProperty.call(next, 'text')) {
+        next.text = normalizePdfMessageTextValue(next.text, nestedCodeBlock);
+        if (!nestedCodeBlock) {
+          next.noWrap = false;
+        }
+      }
+      return next;
+    }
+    return value;
+  }
+
+  function addPdfMessageBreakOpportunities(text) {
+    return ensureString(text).replace(/[^\s\u200b]{28,}/gu, (token) => {
+      if (containsEmojiForPdf(token)) {
+        return token;
+      }
+      const punctuated = token.replace(/([/._?=&:#%+-])/g, '$1\u200b');
+      const chars = Array.from(punctuated);
+      let output = '';
+      let sinceBreak = 0;
+      chars.forEach((char) => {
+        output += char;
+        if (char === '\u200b') {
+          sinceBreak = 0;
+          return;
+        }
+        sinceBreak += 1;
+        if (sinceBreak >= 18) {
+          output += '\u200b';
+          sinceBreak = 0;
+        }
+      });
+      return output;
+    });
+  }
+
+  function addPdfCodeBreakOpportunities(text) {
+    return ensureString(text).replace(/[^\s\u200b]{42,}/gu, (token) => {
+      const chars = Array.from(token);
+      let output = '';
+      chars.forEach((char, index) => {
+        output += char;
+        if ((index + 1) % 24 === 0 && index < chars.length - 1) {
+          output += '\u200b';
+        }
+      });
+      return output;
+    });
+  }
+
   function normalizeGrokPdfContentNode(node, inCodeBlock) {
     if (node === null || node === undefined) {
       return node;
@@ -7178,7 +7978,7 @@ let pdfMakeRef = null;
             resolve(response.responseText != null ? response.responseText : response.response);
           },
           onerror: (error) => {
-            reject(new Error(`${options.label || 'Remote request'} failed: ${String((error && error.error) || error || '')}`));
+            reject(new Error(`${options.label || 'Remote request'} failed: ${formatRemoteRequestError(error)}`));
           },
           ontimeout: () => {
             reject(new Error(`${options.label || 'Remote request'} timed out`));
@@ -7188,6 +7988,30 @@ let pdfMakeRef = null;
         reject(err);
       }
     });
+  }
+
+  function formatRemoteRequestError(error) {
+    if (!error) {
+      return 'unknown network error';
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    const parts = [
+      error.error,
+      error.message,
+      error.statusText,
+      error.status ? `HTTP ${error.status}` : ''
+    ].map(ensureString).filter(Boolean);
+    if (parts.length) {
+      return parts.join(' - ');
+    }
+    try {
+      const json = JSON.stringify(error);
+      return json && json !== '{}' ? json : Object.prototype.toString.call(error);
+    } catch (err) {
+      return Object.prototype.toString.call(error);
+    }
   }
 
   function encodeBase64Utf8(value) {
@@ -7345,10 +8169,13 @@ let pdfMakeRef = null;
       if (PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) || PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)) {
         detectedScripts.add('latin');
       }
-      if (containsPdfSymbolTextForRouting(segment)) {
+      if (containsPdfSymbolTextNeedingSymbolsFont(segment, hasHan || hasJapanese || hasKorean || hasCjkSymbols)) {
         detectedScripts.add('symbolsText');
       }
       PDF_DIRECT_SCRIPT_SCAN_ORDER.forEach((script) => {
+        if (script === 'symbolsText' && !containsPdfSymbolTextNeedingSymbolsFont(segment, hasHan || hasJapanese || hasKorean || hasCjkSymbols)) {
+          return;
+        }
         const pattern = PDF_SCRIPT_DETECTION_PATTERNS[script];
         if (pattern && pattern.test(segment)) {
           detectedScripts.add(script);
@@ -7506,6 +8333,11 @@ let pdfMakeRef = null;
       return false;
     }
     return /advanceWidth|xCoordinate|EmbeddedFont|GPOSProcessor|getAnchor|TTFFont\.layout|FontProvider\.provideFont/i.test(details);
+  }
+
+  function formatRecoverablePdfFontError(error) {
+    const message = ensureString(error && error.message).trim();
+    return message || 'PDF font layout issue';
   }
 
   function buildPdfFontFallbackPlans(fontContext) {
@@ -7683,7 +8515,9 @@ let pdfMakeRef = null;
         const richContent = preparedNode
           ? parseNodeToPdfMake(preparedNode)
           : convertHtmlToPdfMake(htmlContent);
-        const normalizedRichContent = normalizePdfContentForPlatform(richContent);
+        const normalizedRichContent = normalizePdfContentForMessageBox(
+          normalizePdfContentForPlatform(richContent)
+        );
         const emojiRichContent = applyEmojiFontToTree(normalizedRichContent);
         const richContentStack = Array.isArray(emojiRichContent) ? emojiRichContent : [emojiRichContent];
 
@@ -7795,7 +8629,7 @@ let pdfMakeRef = null;
     } catch (err) {
       const fallbackPlans = isRecoverablePdfFontError(err) ? buildPdfFontFallbackPlans(originalFontContext) : [];
       if (fallbackPlans.length) {
-        console.warn('PDF export hit a recoverable font error, retrying with safer font fallbacks', err);
+        console.info(`OmniChat PDF export: recoverable font layout issue, retrying with safer fallbacks (${formatRecoverablePdfFontError(err)}).`);
         for (let index = 0; index < fallbackPlans.length; index += 1) {
           const plan = fallbackPlans[index];
           updatePdfExportLoader({
@@ -7824,7 +8658,7 @@ let pdfMakeRef = null;
             await waitForNextPaint();
             return true;
           } catch (retryErr) {
-            console.warn('PDF export fallback retry failed', plan.disabledScripts, retryErr);
+            console.info(`OmniChat PDF export: fallback retry failed for ${plan.disabledScripts.join(', ') || 'current fonts'} (${formatRecoverablePdfFontError(retryErr)}).`);
           }
         }
       }
@@ -7838,10 +8672,110 @@ let pdfMakeRef = null;
 
   async function downloadPdfDocument(pdfMakeInstance, docDefinition, filename) {
     const instance = pdfMakeInstance.createPdf(docDefinition);
-    const result = instance.download(filename);
-    if (result && typeof result.then === 'function') {
-      await result;
+    if (instance && typeof instance.getBlob === 'function') {
+      const blob = await getPdfBlobWithCapturedErrors(instance);
+      downloadBlob(blob, filename, 'application/pdf');
+      return;
     }
+    await runPdfMakeDownloadWithCapturedErrors(instance, filename);
+  }
+
+  function getPdfBlobWithCapturedErrors(instance) {
+    return capturePdfMakeAsyncErrors(() => {
+      return new Promise((resolve, reject) => {
+        try {
+          const result = instance.getBlob((blob) => {
+            if (!blob) {
+              reject(new Error('PDF blob generation failed'));
+              return;
+            }
+            resolve(blob);
+          });
+          if (result && typeof result.then === 'function') {
+            result.then(resolve, reject);
+          }
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  }
+
+  function runPdfMakeDownloadWithCapturedErrors(instance, filename) {
+    return capturePdfMakeAsyncErrors(() => {
+      return new Promise((resolve, reject) => {
+        try {
+          const result = instance.download(filename);
+          if (result && typeof result.then === 'function') {
+            result.then(resolve, reject);
+            return;
+          }
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  }
+
+  function capturePdfMakeAsyncErrors(task) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        window.removeEventListener('unhandledrejection', onUnhandledRejection);
+        window.removeEventListener('error', onWindowError);
+      };
+      const finish = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        callback(value);
+      };
+      const rejectIfPdfMakeFontError = (error, event) => {
+        if (!isRecoverablePdfFontError(error)) {
+          return false;
+        }
+        if (event && typeof event.preventDefault === 'function') {
+          event.preventDefault();
+        }
+        finish(reject, error);
+        return true;
+      };
+      const onUnhandledRejection = (event) => {
+        rejectIfPdfMakeFontError(event && event.reason, event);
+      };
+      const onWindowError = (event) => {
+        rejectIfPdfMakeFontError((event && event.error) || event, event);
+      };
+
+      window.addEventListener('unhandledrejection', onUnhandledRejection);
+      window.addEventListener('error', onWindowError);
+
+      try {
+        Promise.resolve(task()).then(
+          (value) => finish(resolve, value),
+          (err) => finish(reject, err)
+        );
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+  }
+
+  function downloadBlob(blob, filename, mime) {
+    const payload = blob instanceof Blob
+      ? blob
+      : new Blob([blob], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(payload);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function escapeHtml(value) {
@@ -8077,12 +9011,7 @@ let pdfMakeRef = null;
   }
 
   function getSafePdfSegmentationScripts(scriptLoadList) {
-    if (platform !== 'gemini') {
-      return [];
-    }
-    return scriptLoadList.filter((script, index, list) => {
-      return PDF_SAFE_SEGMENTATION_SCRIPTS.indexOf(script) !== -1 && list.indexOf(script) === index;
-    });
+    return [];
   }
 
   function getPendingPdfFontResources(pdfMakeInstance, scriptLoadList, languageProfile) {
@@ -8621,14 +9550,14 @@ let pdfMakeRef = null;
   }
 
   function detectPdfScriptForSegment(segment, graphemes, index, fontContext) {
-    const priorityScript = detectPriorityPdfScript(segment, graphemes, index);
+    const priorityScript = detectPriorityPdfScript(segment, graphemes, index, fontContext);
     if (priorityScript) {
       return priorityScript;
     }
     return detectDirectPdfScript(segment);
   }
 
-  function detectPriorityPdfScript(segment, graphemes, index) {
+  function detectPriorityPdfScript(segment, graphemes, index, fontContext) {
     if (PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment) ||
       PDF_LATIN_COMBINING_MARK_PATTERN.test(segment) && hasLatinExtendedContext(graphemes, index) ||
       PDF_SCRIPT_DETECTION_PATTERNS.latin.test(segment) && hasLatinExtendedContext(graphemes, index)) {
@@ -8676,6 +9605,17 @@ let pdfMakeRef = null;
 
   function containsPdfSymbolTextForRouting(text) {
     return PDF_SYMBOL_TEXT_PATTERN.test(ensureString(text));
+  }
+
+  function containsPdfSymbolTextNeedingSymbolsFont(text, hasCjkContext) {
+    const value = ensureString(text);
+    if (!value) {
+      return false;
+    }
+    if (PDF_NON_CJK_SYMBOL_TEXT_PATTERN.test(value)) {
+      return true;
+    }
+    return !hasCjkContext && PDF_SYMBOL_TEXT_PATTERN.test(value);
   }
 
   function containsEmojiStyleForPdf(text) {
