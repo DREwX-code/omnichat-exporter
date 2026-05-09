@@ -7,6 +7,24 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.1.2] - 2026-05-09
+
+### Added
+- Added export hover tooltips for DeepSeek message and top export buttons
+- Added PDF font support for Assyrian/Syriac, Inuktut, Avestan, and Tangut
+
+### Improved
+- More natural Claude export hover behavior and positioning
+- Improved Gemini export button visual integration
+- Better DeepSeek thread collection and export reliability with faster virtualized scroll handling
+- Improved PDF compatibility for multilingual fonts, languages, images, long text, tables, and code blocks
+- Improved PDF fallback handling for multilingual fonts
+
+### Fixed
+- Fixed PDF export failures caused by recoverable font rendering issues
+- Fixed export menu reopening when clicking the same export button
+
+
 ## [1.1.1] - 2026-04-26
 
 ### Added
