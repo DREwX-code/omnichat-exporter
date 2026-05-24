@@ -6,6 +6,16 @@ The format is based on Keep a Changelog
 and this project adheres to Semantic Versioning.
 
 ---
+## [1.1.3] - 2026-05-24
+
+### Improved
+- Improved spacing consistency in Gemini PDF exports after inline code snippets
+
+### Fixed
+- Fixed Grok top export button placement across localized interfaces
+- Fixed Gemini top export button alignment beside the native action menu
+- Fixed Gemini page brightness shift when opening the export menu
+
 
 ## [1.1.2] - 2026-05-09
 
