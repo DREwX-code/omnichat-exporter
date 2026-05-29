@@ -6,6 +6,12 @@ The format is based on Keep a Changelog
 and this project adheres to Semantic Versioning.
 
 ---
+## [1.1.4] - 2026-05-29
+
+### Fixed
+- Fixed export button styling issues on Grok and Gemini
+
+
 ## [1.1.3] - 2026-05-24
 
 ### Improved
