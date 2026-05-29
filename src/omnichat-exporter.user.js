@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.1.3
+// @version      1.1.4
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -203,8 +203,15 @@ Licenses:
   const GROK_THREAD_EXPORT_CLASS =
     `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] ` +
     `cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 ` +
-    `[&_svg]:shrink-0 select-none hover:bg-button-ghost-hover hover:text-fg-primary disabled:hover:bg-transparent border border-transparent rounded-full overflow-hidden ` +
-    `h-10 w-10 p-2 text-fg-primary`;
+    `[&_svg]:shrink-0 select-none border border-border-l2 text-fg-primary hover:bg-button-ghost-hover disabled:hover:bg-transparent ` +
+    `h-10 px-4 py-2 rounded-full`;
+  const GROK_TURN_EXPORT_CLASS =
+    `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] cursor-pointer ` +
+    `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed transition-colors duration-100 ` +
+    `[&_svg]:shrink-0 select-none text-fg-secondary hover:text-fg-primary hover:bg-button-ghost-hover disabled:hover:text-fg-secondary ` +
+    `disabled:hover:bg-transparent [&_svg]:hover:text-fg-primary h-8 w-8 rounded-full opacity-0 group-focus-within:opacity-100 ` +
+    `group-hover:opacity-100 [.last-response_&]:opacity-100 disabled:opacity-0 group-focus-within:disabled:opacity-60 ` +
+    `group-hover:disabled:opacity-60 [.last-response_&]:disabled:opacity-60`;
   const GEMINI_ACTIONS_SELECTOR = '.actions-container-v2';
   const GEMINI_CONVERSATION_SELECTOR = '.conversation-container';
   const GEMINI_TURN_EXPORT_ATTR = 'data-omni-export-gemini-turn';
@@ -911,10 +918,44 @@ let pdfMakeRef = null;
 }
 
 .omni-exporter-grok.${EXPORT_BUTTON_CLASS} svg {
-  width: 18px;
-  height: 18px;
+  width: 16px !important;
+  height: 16px !important;
   display: block;
   color: currentColor;
+}
+
+button[${GROK_EXPORT_ATTR}] svg,
+button[${GROK_THREAD_EXPORT_ATTR}] svg {
+  width: 16px !important;
+  height: 16px !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: middle !important;
+}
+
+button[${GROK_EXPORT_ATTR}],
+button[${GROK_THREAD_EXPORT_ATTR}] {
+  margin-bottom: 0 !important;
+}
+
+button[${GROK_EXPORT_ATTR}] > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+button[${GROK_EXPORT_ATTR}][data-omni-scope="thread"] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
+  width: 16px !important;
+  height: 16px !important;
 }
 
 .${MENU_CLASS} {
@@ -1096,6 +1137,24 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+
+button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon > svg,
+button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] gem-icon svg,
+button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .icon {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: middle !important;
+}
+
+button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon > span,
+button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exporter-gemini-native-icon-inner {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
 }
 
 .omni-exporter-btn[data-omni-export-claude-turn] {
@@ -1627,8 +1686,12 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
 
   function attachGrokButtons(root) {
     repairGrokExportButtonScopes(root);
+    cleanupGrokExportButtons(root);
     collectGrokActionReferenceButtons(root).forEach((referenceButton) => {
       const isTurnButton = isGrokMessageScopedElement(referenceButton);
+      if (!isTurnButton) {
+        return;
+      }
       const actionBar = referenceButton.parentElement;
       if (!actionBar) {
         return;
@@ -1636,6 +1699,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
       const existing = actionBar.querySelector(`[${GROK_EXPORT_ATTR}]`);
       if (existing) {
         normalizeGrokExportButtonScope(existing, isTurnButton ? 'turn' : 'thread');
+        if (isTurnButton) {
+          syncGrokTurnExportButton(existing);
+        }
         return;
       }
       const button = buildGrokNativeExportButton(referenceButton, isTurnButton ? 'turn' : 'thread');
@@ -1698,8 +1764,18 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
         if (actionButtons.length < 2) {
           return;
         }
+        if (isGrokSuggestionButtonGroup(actionBar, actionButtons)) {
+          return;
+        }
+        if (isGrokUserActionButtonGroup(actionBar, actionButtons)) {
+          return;
+        }
+        const shareLikeButton = actionButtons.find(isGrokShareLikeButton);
+        if (!shareLikeButton) {
+          return;
+        }
         actionBars.add(actionBar);
-        references.push(actionButtons.find(isGrokShareLikeButton) || actionButtons[actionButtons.length - 1]);
+        references.push(shareLikeButton);
       });
     });
     return references;
@@ -1727,11 +1803,73 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     if (button.closest('pre, code, textarea, input, form')) {
       return false;
     }
+    if (button.querySelector('.lucide-corner-down-right')) {
+      return false;
+    }
     const text = normalizeText(button.textContent || '');
     if (text.length > 48) {
       return false;
     }
     return true;
+  }
+
+  function isGrokSuggestionButtonGroup(actionBar, actionButtons) {
+    if (!actionBar || !actionButtons || actionButtons.length < 2) {
+      return false;
+    }
+    const className = ensureString(actionBar.className);
+    if (
+      className.includes('flex-col') &&
+      className.includes('gap-1') &&
+      actionButtons.some((button) => button.querySelector('.lucide-corner-down-right'))
+    ) {
+      return true;
+    }
+    const textButtons = actionButtons.filter((button) => normalizeText(button.textContent || '').length > 2);
+    return textButtons.length >= 2;
+  }
+
+  function isGrokUserActionButtonGroup(actionBar, actionButtons) {
+    if (!actionBar || !actionButtons || !actionButtons.length) {
+      return false;
+    }
+    const hasShare = actionButtons.some(isGrokShareLikeButton);
+    if (hasShare) {
+      return false;
+    }
+    return actionButtons.some((button) => {
+      const label = [
+        button.getAttribute('aria-label'),
+        button.getAttribute('title'),
+        button.textContent
+      ].map(ensureString).join(' ');
+      return /edit|modifier|bearbeiten|editar|modificar|измен|編集|수정|تعديل/i.test(label);
+    });
+  }
+
+  function cleanupGrokExportButtons(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const buttons = [];
+    if (root && root.matches && root.matches(`[${GROK_EXPORT_ATTR}]`)) {
+      buttons.push(root);
+    }
+    buttons.push(...scope.querySelectorAll(`[${GROK_EXPORT_ATTR}]`));
+    buttons.forEach((button) => {
+      if (!isGrokMessageScopedElement(button)) {
+        if (button.hasAttribute(GROK_THREAD_EXPORT_ATTR)) {
+          return;
+        }
+        button.remove();
+        return;
+      }
+      const actionBar = button.parentElement;
+      const actionButtons = actionBar
+        ? Array.from(actionBar.querySelectorAll(':scope > button')).filter((candidate) => candidate !== button)
+        : [];
+      if (isGrokSuggestionButtonGroup(actionBar, actionButtons) || isGrokUserActionButtonGroup(actionBar, actionButtons)) {
+        button.remove();
+      }
+    });
   }
 
   function isGrokShareLikeButton(button) {
@@ -1756,6 +1894,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     button.removeAttribute('data-radix-collection-item');
     button.setAttribute('type', 'button');
     normalizeGrokExportButtonScope(button, scope || 'turn');
+    if ((scope || 'turn') === 'turn') {
+      syncGrokTurnExportButton(button);
+    }
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('data-state', 'closed');
@@ -1766,6 +1907,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
       toggleMenu(button);
     });
     return button;
+  }
+
+  function syncGrokTurnExportButton(button) {
+    if (!button) {
+      return;
+    }
+    button.className = GROK_TURN_EXPORT_CLASS;
+    button.style.setProperty('margin-bottom', '0', 'important');
+    button.style.removeProperty('margin-right');
+    syncGrokExportIconSpacing(button);
   }
 
   function buildGrokNativeTurnButton(referenceButton) {
@@ -2493,6 +2644,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     button.setAttribute(GEMINI_THREAD_NATIVE_ATTR, 'true');
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
+    syncGeminiThreadIconSpacing(button);
 
     button.addEventListener('click', (event) => {
       event.preventDefault();
@@ -2501,6 +2653,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     });
 
     return button;
+  }
+
+  function syncGeminiThreadIconSpacing(button) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    button.querySelectorAll('mat-icon, gem-icon, mat-icon > svg, gem-icon svg, .icon').forEach((node) => {
+      node.style.setProperty('margin', '0', 'important');
+      node.style.setProperty('padding', '0', 'important');
+    });
   }
 
   function createGeminiNativeTurnIconButton() {
@@ -2660,7 +2822,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
   }
 
   function attachGrokThreadButton(root) {
-    let existingButton = document.querySelector(`[${GROK_THREAD_EXPORT_ATTR}]`);
+    let existingButton = getPrimaryGrokThreadButton();
+    removeDuplicateGrokThreadButtons(existingButton);
     if (!hasActiveGrokThreadContext()) {
       removeGrokThreadButton(existingButton);
       return;
@@ -2684,6 +2847,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     }
 
     const button = existingButton || buildGrokThreadExportButton();
+    syncGrokThreadExportButton(button);
 
     if (shareButton) {
       if (shareButton.previousElementSibling !== button) {
@@ -2696,13 +2860,55 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
     }
   }
 
+  function getPrimaryGrokThreadButton() {
+    const buttons = Array.from(document.querySelectorAll(`[${GROK_THREAD_EXPORT_ATTR}]`));
+    return buttons.find((button) => !button.hasAttribute(GROK_EXPORT_ATTR)) || buttons[0] || null;
+  }
+
+  function removeDuplicateGrokThreadButtons(primaryButton) {
+    Array.from(document.querySelectorAll(`[${GROK_THREAD_EXPORT_ATTR}]`)).forEach((button) => {
+      if (button !== primaryButton) {
+        button.remove();
+      }
+    });
+  }
+
   function buildGrokThreadExportButton() {
     const button = buildExportButton('thread', {
       overrideClassName: GROK_THREAD_EXPORT_CLASS
     });
     button.setAttribute(GROK_THREAD_EXPORT_ATTR, 'true');
     button.setAttribute('aria-label', 'Exporter la conversation');
+    syncGrokThreadExportButton(button);
     return button;
+  }
+
+  function syncGrokThreadExportButton(button) {
+    if (!button) {
+      return;
+    }
+    button.className = GROK_THREAD_EXPORT_CLASS;
+    button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon()}</span>`;
+    button.style.setProperty('margin-bottom', '0', 'important');
+    button.setAttribute('aria-label', 'Exporter la conversation');
+    button.setAttribute('type', 'button');
+    button.setAttribute('data-state', 'closed');
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute(GROK_EXPORT_ATTR, 'true');
+    button.setAttribute(GROK_THREAD_EXPORT_ATTR, 'true');
+    syncGrokExportIconSpacing(button);
+  }
+
+  function syncGrokExportIconSpacing(button) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    button.querySelectorAll('span, svg').forEach((node) => {
+      node.style.setProperty('margin', '0', 'important');
+      node.style.setProperty('padding', '0', 'important');
+      node.style.setProperty('line-height', '0', 'important');
+    });
   }
 
   function hasActiveGrokThreadContext() {
