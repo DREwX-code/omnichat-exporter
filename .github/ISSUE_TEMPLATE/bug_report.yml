@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a problem with OmniChat Exporter
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem with OmniChat Exporter.
+        Please provide enough details to help reproduce and fix the issue.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which AI platform is affected?
+      options:
+        - ChatGPT
+        - Gemini
+        - Claude
+        - Grok
+        - DeepSeek
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: export_format
+    attributes:
+      label: Export format
+      description: Which export format is affected?
+      options:
+        - TXT
+        - Markdown
+        - JSON
+        - PDF
+        - All formats
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: "Example: Chrome, Firefox, Edge, Brave, Safari"
+    validations:
+      required: true
+
+  - type: input
+    id: userscript_manager
+    attributes:
+      label: Userscript manager
+      placeholder: "Example: Tampermonkey, Violentmonkey, Userscripts"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly.
+      placeholder: "The export button appears, but PDF export does not download..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Explain how to reproduce the problem.
+      placeholder: |
+        1. Open ChatGPT
+        2. Open a conversation
+        3. Click the export button
+        4. Select PDF
+        5. See the error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "The conversation should export as a PDF file."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or console errors
+      description: Add screenshots or browser console errors if useful.
+    validations:
+      required: false
