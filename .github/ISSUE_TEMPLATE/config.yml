@@ -2,7 +2,7 @@ blank_issues_enabled: true
 
 contact_links:
   - name: Questions and general feedback
-    url: https://github.com/DREwX-code/omnichat-exporter/issues
+    url: url: https://github.com/DREwX-code/omnichat-exporter/discussions
     about: Ask questions, share feedback, or discuss general usage through GitHub Issues.
 
   - name: Install OmniChat Exporter
