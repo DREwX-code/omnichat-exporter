@@ -108,6 +108,6 @@ You can also manually check for updates from your userscript manager dashboard.
 
 ## Need More Help?
 
-If you're still experiencing issues, open a GitHub Issue from the main repository page.
+If you're still experiencing issues, open a **[GitHub Issue](../../../issues/new?template=bug_report.yml)**.
 
-When GitHub Discussions are available, they can be used for questions, ideas, and general feedback.
+For questions, ideas, and general feedback, start a **[GitHub Discussion](../../../discussions)** instead.
