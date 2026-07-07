@@ -6,6 +6,33 @@ The format is based on Keep a Changelog
 and this project adheres to Semantic Versioning.
 
 ---
+## [1.1.5] - 2026-07-07
+
+### Added
+- Native-style export tooltips on supported platforms
+- Strikethrough support in PDF exports
+
+### Improved
+- Markdown export formatting for checkboxes, conversation title, URL line breaks, and nested lists
+- PDF list rendering with cleaner indentation, wrapping, numbered lists, and nested lists
+- Horizontal rule rendering in PDF exports
+- PDF compatibility with multilingual text, RTL content, Unicode symbols, and fallback fonts
+- Native-looking export button styling across ChatGPT, Claude, Gemini, Grok, and DeepSeek
+- Light/dark theme consistency for export buttons and icons
+- Tooltip positioning, closing behavior, scroll handling, and export menu consistency
+- Gemini loading behavior to reduce export button flickering
+- Overall UI stability with fewer unnecessary refreshes and visual glitches
+
+### Fixed
+- Language-dependent selectors on several platforms
+- Gemini floating export button appearing in unwanted contexts
+- Button recreation and flickering issues
+- Tooltip repositioning issues
+- Tooltips remaining visible behind export menus
+- Outdated button styles after native interface updates
+- Grok global export button placement
+- Several light/dark theme inconsistencies
+
 ## [1.1.4] - 2026-05-29
 
 ### Fixed
