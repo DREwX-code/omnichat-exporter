@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.1.4
+// @version      1.1.5
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -186,25 +186,36 @@ Licenses:
     return;
   }
 
+  // ─────────────────────────────────────────────
+  // Constants and platform selectors
+  // ─────────────────────────────────────────────
+
   const STYLE_ID = 'omni-exporter-style';
   const EXPORT_BUTTON_CLASS = 'omni-exporter-btn';
   const SHARE_BUTTON_SELECTOR =
-    'button[data-testid="copy-turn-action-button"], button[data-testid="share-chat-button"], [aria-label="Partager"], [aria-label="Share"]';
+    'button[data-testid="copy-turn-action-button"], button[data-testid="share-chat-button"]';
   const TURN_SELECTOR = '[data-testid^="conversation-turn"]';
   const HEADER_ACTIONS_SELECTOR = '#conversation-header-actions';
   const HEADER_EXPORT_ATTR = 'data-omni-export-header';
   const EXPORT_SCOPE_ATTR = 'data-omni-scope';
-  const GROK_SHARE_BUTTON_SELECTOR =
-    'button[aria-label*="lien de partage" i], button[aria-label*="share link" i], button[aria-label*="share" i], button[aria-label*="partager" i]';
+  const CHATGPT_TOOLTIP_STYLE_ID = 'omni-gpt-tooltip-style';
+  const CHATGPT_TOOLTIP_BOUND_ATTR = 'data-omni-gpt-tooltip-bound';
   const GROK_EXPORT_ATTR = 'data-omni-export-grok';
   const GROK_HEADER_SELECTOR =
-    '.absolute.flex.flex-row.items-center.ms-auto.end-3, .absolute.flex.flex-row.items-center.gap-0\\.5.ms-auto.end-3, .absolute.flex.flex-row.items-center.gap-1\\.5.ms-auto.end-3';
+    '[class*="absolute"][class*="flex-row"][class*="items-center"][class*="ms-auto"][class*="end-3"], ' +
+    '[class*="absolute"][class*="flex-row"][class*="items-center"][class*="ms-auto"][class*="right-3"], ' +
+    '.flex.shrink-0.flex-row.items-center.gap-1\\.5';
   const GROK_THREAD_EXPORT_ATTR = 'data-omni-export-grok-thread';
+  const GROK_TOOLTIP_BOUND_ATTR = 'data-omni-grok-tooltip-bound';
+  const GROK_TOOLTIP_PORTAL_ATTR = 'data-omni-grok-tooltip';
+  const GROK_TOOLTIP_DELAY_MS = 100;
+  const GROK_THREAD_TOOLTIP_DELAY_MS = 300;
+  const GROK_TOOLTIP_CLOSE_MS = 165;
   const GROK_THREAD_EXPORT_CLASS =
     `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] ` +
     `cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 ` +
-    `[&_svg]:shrink-0 select-none border border-border-l2 text-fg-primary hover:bg-button-ghost-hover disabled:hover:bg-transparent ` +
-    `h-10 px-4 py-2 rounded-full`;
+    `[&_svg]:shrink-0 select-none text-fg-secondary hover:bg-button-ghost-hover hover:text-fg-primary disabled:hover:bg-transparent ` +
+    `border border-transparent rounded-full overflow-hidden h-10 w-10 p-2`;
   const GROK_TURN_EXPORT_CLASS =
     `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] cursor-pointer ` +
     `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed transition-colors duration-100 ` +
@@ -218,36 +229,44 @@ Licenses:
   const GEMINI_TURN_NATIVE_ATTR = 'data-omni-gemini-native-turn';
   const GEMINI_TURN_HOST_ATTR = 'data-omni-gemini-turn-host';
   const GEMINI_SHARE_BUTTON_SELECTOR =
-    'button[data-test-id="share-and-export-menu-button"], button[data-test-id="share-button"], button[aria-label*="Partager et exporter"], button[aria-label*="Share and export"], button[aria-label*="Partager la conversation"], button[aria-label*="Share conversation"]';
+    'button[data-test-id="share-and-export-menu-button"], button[data-test-id="share-button"], share-button button, gem-icon-button[data-test-id="share-and-export-menu-button"] button, gem-icon-button[data-test-id="share-button"] button';
   const GEMINI_THREAD_SHARE_BUTTON_SELECTOR =
-    'button[data-test-id="share-and-export-menu-button"], button[aria-label*="Partager et exporter"], button[aria-label*="Share and export"], button[aria-label*="Partager la conversation"], button[aria-label*="Share conversation"]';
+    'button[data-test-id="share-and-export-menu-button"], button[data-test-id="share-button"], share-button button, gem-icon-button[data-test-id="share-and-export-menu-button"] button, gem-icon-button[data-test-id="share-button"] button';
   const GEMINI_MENU_BUTTON_SELECTOR =
-    'button[data-test-id="more-menu-button"], button[data-test-id="conversation-actions-menu-icon-button"]';
+    'button[data-test-id="more-menu-button"], button[data-test-id="conversation-actions-menu-icon-button"], gem-icon-button[data-test-id="more-menu-button"] button, gem-icon-button[data-test-id="conversation-actions-menu-icon-button"] button';
   const GEMINI_HEADER_SELECTOR = '.buttons-container.share';
   const GEMINI_UPSELL_SELECTOR =
     '.adv-upsell, g1-dynamic-upsell-button, [data-test-id*="upsell" i], [data-test-id*="upgrade" i], button[data-test-id="bard-g1-dynamic-upsell-menu-button"]';
   const GEMINI_NON_CONVERSATION_ACTION_SELECTOR =
-    '[data-test-id*="install" i], [aria-label*="Install" i], [aria-label*="Installer" i]';
+    '[data-test-id*="install" i]';
   const GEMINI_THREAD_EXPORT_ATTR = 'data-omni-export-gemini-thread';
   const GEMINI_THREAD_NATIVE_ATTR = 'data-omni-gemini-native-thread';
   const GEMINI_THREAD_FALLBACK_ATTR = 'data-omni-gemini-thread-fallback';
+  const GEMINI_TOOLTIP_BOUND_ATTR = 'data-omni-gemini-tooltip-bound';
+  const GEMINI_NATIVE_TOOLTIP_SWITCH_BOUND_ATTR = 'data-omni-gemini-native-tooltip-switch-bound';
+  const GEMINI_TOOLTIP_OVERLAY_ATTR = 'data-omni-gemini-tooltip';
+  const GEMINI_TOOLTIP_SHOW_DELAY_MS = 0;
+  const GEMINI_TOOLTIP_REMOVE_DELAY_MS = 75;
   const CLAUDE_HEADER_SELECTOR = '[data-testid="wiggle-controls-actions"]';
   const CLAUDE_SHARE_SELECTOR = '[data-testid="wiggle-controls-actions-share"]';
   const CLAUDE_THREAD_EXPORT_ATTR = 'data-omni-export-claude-thread';
-  const CLAUDE_ACTIONS_SELECTOR = '[role="group"][aria-label="Message actions"]';
-  const CLAUDE_COPY_SELECTOR = '[data-testid="action-bar-copy"], button[aria-label="Copy"]';
+  const CLAUDE_ACTIONS_SELECTOR = '[data-message-action-bar]';
+  const CLAUDE_COPY_SELECTOR = '[data-testid="action-bar-copy"]';
   const CLAUDE_TURN_EXPORT_ATTR = 'data-omni-export-claude-turn';
-  const CLAUDE_TOOLTIP_DELAY_MS = 168.043;
+  const CLAUDE_TOOLTIP_BOUND_ATTR = 'data-omni-claude-tooltip-bound';
+  const CLAUDE_TOOLTIP_DELAY_MS = 500;
+  const CLAUDE_TOOLTIP_SKIP_DELAY_MS = 300;
+  const CLAUDE_TOOLTIP_HIDE_DELAY_MS = 120;
   const DEEPSEEK_ACTIONS_SELECTOR = 'div.ds-flex._0a3d93b';
   const DEEPSEEK_GROUP_SELECTOR = 'div.ds-flex._965abe9';
   const DEEPSEEK_ROLE_BUTTON_SELECTOR = '[role="button"]';
   const DEEPSEEK_TURN_BUTTON_CLASSNAME =
-    'db183363 ds-icon-button ds-icon-button--m ds-icon-button--sizing-container';
+    'ds-button ds-button--iconLabelTertiary ds-button--icon ds-button--capsule ds-button--xs ds-button--icon-relative-l db183363';
   const DEEPSEEK_THREAD_BUTTON_CLASSNAME =
-    '_57370c5 _5dedc1e ds-icon-button ds-icon-button--l ds-icon-button--sizing-container';
+    'ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--l ds-button--icon-relative-m _57370c5 _5dedc1e';
   const DEEPSEEK_EXPORT_ATTR = 'data-omni-export-deepseek';
   const DEEPSEEK_THREAD_BUTTON_SELECTOR =
-    'div._57370c5._5dedc1e.ds-icon-button.ds-icon-button--l.ds-icon-button--sizing-container[role="button"]';
+    'div.ds-button.ds-button--iconLabelPrimary.ds-button--icon.ds-button--capsule.ds-button--l.ds-button--icon-relative-m[role="button"]';
   const DEEPSEEK_THREAD_EXPORT_ATTR = 'data-omni-export-deepseek-thread';
   const DEEPSEEK_SCROLL_SETTLE_MS = 70;
   const DEEPSEEK_SCROLL_RESTORE_SETTLE_MS = 120;
@@ -353,6 +372,13 @@ Licenses:
       file: 'NotoSansSymbols-Regular.ttf',
       urls: [
         'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSymbols/NotoSansSymbols-Regular.ttf'
+      ]
+    },
+    symbolsExtra: {
+      family: 'NotoSansSymbols2',
+      file: 'NotoSansSymbols2-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSymbols2/NotoSansSymbols2-Regular.ttf'
       ]
     },
     latinExtended: {
@@ -564,12 +590,34 @@ Licenses:
       urls: [
         'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansEgyptianHieroglyphs/NotoSansEgyptianHieroglyphs-Regular.ttf'
       ]
+    },
+    runic: {
+      family: 'NotoSansRunic',
+      file: 'NotoSansRunic-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansRunic/NotoSansRunic-Regular.ttf'
+      ]
+    },
+    glagolitic: {
+      family: 'NotoSansGlagolitic',
+      file: 'NotoSansGlagolitic-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansGlagolitic/NotoSansGlagolitic-Regular.ttf'
+      ]
+    },
+    cuneiform: {
+      family: 'NotoSansCuneiform',
+      file: 'NotoSansCuneiform-Regular.ttf',
+      urls: [
+        'https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansCuneiform/NotoSansCuneiform-Regular.ttf'
+      ]
     }
   };
   const PDF_SCRIPT_DETECTION_PATTERNS = {
     symbolsText: /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u,
+    symbolsExtra: /[\u2200-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF]/u,
     latin: /[A-Za-z\u00C0-\u024F]/u,
-    latinExtended: /[\u0100-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F]/u,
+    latinExtended: /[\u0100-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F\uFB00-\uFB06]/u,
     chinese: /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u,
     japanese: /[\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF]/u,
     korean: /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/u,
@@ -597,10 +645,14 @@ Licenses:
     tangut: /[\u{17000}-\u{187FF}\u{18800}-\u{18AFF}\u{18D00}-\u{18D8F}]/u,
     avestan: /[\u{10B00}-\u{10B3F}]/u,
     egyptianHieroglyphs: /[\u{13000}-\u{1345F}]/u,
+    runic: /[\u16A0-\u16FF]/u,
+    glagolitic: /[\u2C00-\u2C5F\u{1E000}-\u{1E02F}]/u,
+    cuneiform: /[\u{12000}-\u{123FF}\u{12400}-\u{1247F}]/u,
     greek: /[\u0370-\u03FF\u1F00-\u1FFF]/u,
     cyrillic: /[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]/u
   };
   const PDF_DIRECT_SCRIPT_SCAN_ORDER = [
+    'symbolsExtra',
     'symbolsText',
     'latinExtended',
     'arabic',
@@ -627,11 +679,15 @@ Licenses:
     'georgian',
     'ethiopic',
     'egyptianHieroglyphs',
+    'runic',
+    'glagolitic',
+    'cuneiform',
     'greek',
     'cyrillic'
   ];
   const PDF_SCRIPT_RESOURCE_LABELS = {
     symbolsText: 'Symbols font',
+    symbolsExtra: 'Extended symbols font',
     latinExtended: 'Extended Latin font',
     chinese: 'Chinese font',
     japanese: 'Japanese font',
@@ -660,6 +716,9 @@ Licenses:
     georgian: 'Georgian font',
     ethiopic: 'Amharic / Ethiopic font',
     egyptianHieroglyphs: 'Egyptian hieroglyph font',
+    runic: 'Runic font',
+    glagolitic: 'Glagolitic font',
+    cuneiform: 'Cuneiform font',
     greek: 'Greek font',
     cyrillic: 'Cyrillic font',
     emoji: 'Emoji / symbols font'
@@ -691,6 +750,8 @@ Licenses:
     armenian: 'hy',
     georgian: 'ka',
     ethiopic: 'am',
+    runic: 'non',
+    glagolitic: 'cu',
     greek: 'el',
     cyrillic: 'ru'
   };
@@ -721,6 +782,9 @@ Licenses:
     'armenian',
     'georgian',
     'ethiopic',
+    'runic',
+    'glagolitic',
+    'cuneiform',
     'greek',
     'cyrillic',
     'latin'
@@ -749,6 +813,9 @@ Licenses:
     'ethiopic',
     'armenian',
     'georgian',
+    'runic',
+    'glagolitic',
+    'cuneiform',
     'japanese',
     'korean',
     'chinese',
@@ -756,8 +823,8 @@ Licenses:
   ];
   const PDF_HAN_PATTERN = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u;
   const PDF_CJK_SYMBOL_PATTERN = /[\u3000-\u303F\uFF00-\uFFEF]/u;
-  const PDF_SYMBOL_TEXT_PATTERN = /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
-  const PDF_NON_CJK_SYMBOL_TEXT_PATTERN = /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
+  const PDF_SYMBOL_TEXT_PATTERN = /[\u2190-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
+  const PDF_NON_CJK_SYMBOL_TEXT_PATTERN = /[\u2190-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
   const PDF_EMOJI_STYLE_PATTERN = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u{FE0F}|\u{20E3}|\u{200D}|[\u{1F100}-\u{1F2FF}])/u;
   const PDF_SAFE_SEGMENTATION_SCRIPTS = [
     'arabic',
@@ -855,10 +922,39 @@ Licenses:
     hye: 'hy',
     zho: 'zh'
   };
+
+  // ─────────────────────────────────────────────
+  // Runtime state
+  // ─────────────────────────────────────────────
+
 let iconCounter = 0;
 let activeMenu = null;
 let activeMenuButton = null;
 let menuCleanup = null;
+let chatGptTooltip = null;
+let chatGptTooltipTarget = null;
+let chatGptTooltipCleanup = null;
+let chatGptThemeObserver = null;
+let chatGptThemeSyncQueued = false;
+let claudeTooltipWarmUntil = 0;
+let claudeTooltipShowTimer = null;
+let claudeTooltipBridgeInstalled = false;
+let activeClaudeBridgeTooltip = null;
+let activeClaudeOmniTooltipCloser = null;
+let activeGeminiTooltip = null;
+let geminiTooltipShowTimer = null;
+let geminiTooltipHideTimer = null;
+let geminiTooltipTargetHovered = false;
+let geminiTooltipHovered = false;
+let geminiThemeObserver = null;
+let geminiThemeSyncQueued = false;
+let activeGrokTooltip = null;
+let grokTooltipTarget = null;
+let grokTooltipCycle = 0;
+let grokTooltipShowTimer = null;
+let grokTooltipHideTimer = null;
+let grokTooltipScrollCleanup = null;
+let grokTooltipAnchorCleanup = null;
 let lastGeminiThreadInjectionLogKey = '';
 let pdfMakeRef = null;
   let activePdfFontContext = null;
@@ -871,8 +967,12 @@ let pdfMakeRef = null;
   let emojiRegexRef = null;
   let graphemeSegmenterRef = null;
 
+  // ─────────────────────────────────────────────
+  // Shared stylesheet
+  // ─────────────────────────────────────────────
+
   const styles = `
-.${EXPORT_BUTTON_CLASS}:not(.omni-exporter-grok) {
+.${EXPORT_BUTTON_CLASS}:not(.omni-exporter-grok):not([${CLAUDE_THREAD_EXPORT_ATTR}]):not([${CLAUDE_TURN_EXPORT_ATTR}]) {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
@@ -886,7 +986,7 @@ let pdfMakeRef = null;
   cursor: pointer;
 }
 
-.${EXPORT_BUTTON_CLASS}:not(.omni-exporter-grok) svg {
+.${EXPORT_BUTTON_CLASS}:not(.omni-exporter-grok):not([${CLAUDE_THREAD_EXPORT_ATTR}]):not([${CLAUDE_TURN_EXPORT_ATTR}]) svg {
   width: 18px;
   height: 18px;
   display: block;
@@ -939,7 +1039,7 @@ button[${GROK_THREAD_EXPORT_ATTR}] {
   margin-bottom: 0 !important;
 }
 
-button[${GROK_EXPORT_ATTR}] > span {
+button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] > span {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -949,8 +1049,8 @@ button[${GROK_EXPORT_ATTR}] > span {
 }
 
 button[${GROK_EXPORT_ATTR}][data-omni-scope="thread"] svg {
-  width: 18px !important;
-  height: 18px !important;
+  width: 20px !important;
+  height: 20px !important;
 }
 
 button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
@@ -1012,12 +1112,15 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
   outline-offset: 2px;
 }
 
-.omni-exporter-btn:not(.omni-exporter-grok) { color: #f3f3f3 !important; }
-.omni-exporter-btn[data-omni-scope="turn"] svg path {
+.omni-exporter-btn:not(.omni-exporter-grok):not(.text-token-text-secondary):not([data-omni-export-claude-thread]):not([data-omni-export-claude-turn]) { color: #f3f3f3 !important; }
+.omni-exporter-btn.text-token-text-secondary[data-omni-scope="turn"] svg path {
+  stroke: currentColor !important;
+}
+.omni-exporter-btn[data-omni-scope="turn"]:not([data-omni-export-claude-turn]) svg path {
   stroke-width: 1.6;
 }
 
-.omni-exporter-btn[data-omni-scope="thread"]:hover {
+.omni-exporter-btn[data-omni-scope="thread"]:not([data-omni-export-claude-thread]):hover {
   background-color: var(--token-bg-secondary);
   border-radius: 8px;
 }
@@ -1045,6 +1148,17 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
 }
 
 [data-omni-gemini-turn-host] {
+  --mat-icon-button-state-layer-size: 36px;
+  --mat-icon-button-icon-color: var(--lumi-sys-color--on-surface, rgb(31, 31, 31));
+  --mat-icon-button-ripple-color: color(from var(--lumi-sys-color--on-surface, rgb(31, 31, 31)) srgb r g b / 0.1);
+  --mat-icon-button-state-layer-color: var(--lumi-sys-color--on-surface, rgb(31, 31, 31));
+  --mat-icon-button-hover-state-layer-opacity: var(--gem-sys-state--hover-state-layer-opacity, 0.08);
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   margin-right: 0 !important;
   padding-right: 0 !important;
   display: inline-flex !important;
@@ -1059,38 +1173,45 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
 }
 
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] {
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  max-height: 40px !important;
+  --mat-icon-button-state-layer-size: 36px;
+  --mat-icon-button-icon-color: var(--lumi-sys-color--on-surface, rgb(31, 31, 31));
+  --mat-icon-button-ripple-color: color(from var(--lumi-sys-color--on-surface, rgb(31, 31, 31)) srgb r g b / 0.1);
+  --mat-icon-button-state-layer-color: var(--lumi-sys-color--on-surface, rgb(31, 31, 31));
+  --mat-icon-button-hover-state-layer-opacity: var(--gem-sys-state--hover-state-layer-opacity, 0.08);
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   padding: 0 !important;
-  margin: -2px !important;
+  margin: 0 !important;
   border-radius: 50% !important;
-  line-height: 40px !important;
+  line-height: 36px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   vertical-align: middle !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
-  color: var(--omni-gemini-turn-color, rgb(162, 169, 176)) !important;
+  color: var(--mat-icon-button-icon-color) !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-persistent-ripple,
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-ripple,
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-ripple,
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-touch-target {
-  width: 40px !important;
-  height: 40px !important;
+  width: 36px !important;
+  height: 36px !important;
   inset: 0 !important;
   border-radius: 50% !important;
 }
 
-button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] .mat-mdc-button-persistent-ripple.mdc-button__ripple {
-  transform: scale(0.85) !important;
-  transform-origin: center !important;
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn]:hover .mat-mdc-button-persistent-ripple,
+button[data-omni-export-gemini-turn][data-omni-gemini-native-turn]:focus-visible .mat-mdc-button-persistent-ripple {
+  background-color: color(from var(--lumi-sys-color--on-surface, rgb(31, 31, 31)) srgb r g b / var(--gem-sys-state--hover-state-layer-opacity, 0.08)) !important;
 }
 
 button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] mat-icon {
@@ -1104,19 +1225,20 @@ button[data-omni-export-gemini-turn][data-omni-gemini-native-turn] mat-icon {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  color: var(--omni-gemini-turn-color, rgb(162, 169, 176)) !important;
+  color: var(--mat-icon-button-icon-color) !important;
 }
 
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] {
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  max-height: 40px !important;
+  color: var(--omni-gemini-thread-color, currentColor) !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   padding: 0 !important;
   border-radius: 50% !important;
-  line-height: 40px !important;
+  line-height: 36px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1127,6 +1249,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] {
 
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] gem-icon,
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon {
+  color: var(--omni-gemini-thread-color, currentColor) !important;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px !important;
@@ -1142,6 +1265,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon 
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] mat-icon > svg,
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] gem-icon svg,
 button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .icon {
+  color: var(--omni-gemini-thread-color, currentColor) !important;
   display: block !important;
   width: 18px !important;
   height: 18px !important;
@@ -1157,13 +1281,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   line-height: 0 !important;
 }
 
-.omni-exporter-btn[data-omni-export-claude-turn] {
-  color: #9c9a92 !important;
+.omni-exporter-btn[data-omni-export-claude-thread] {
+  position: relative !important;
+  isolation: isolate !important;
 }
 
-.omni-exporter-btn[data-omni-export-claude-turn]:hover {
-  color: #faf9f5 !important;
-  background-color: rgba(156, 154, 146, 0.15);
+.omni-exporter-btn[data-omni-export-claude-thread] svg,
+.omni-exporter-btn[data-omni-export-claude-thread] svg path,
+.omni-exporter-btn[data-omni-export-claude-thread] [data-cds="Icon"] {
+  color: currentColor !important;
+  stroke: currentColor !important;
 }
 
 .omni-exporter-gemini-floating {
@@ -1344,9 +1471,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
 `;
 
-  function buildExportIcon() {
+  // ─────────────────────────────────────────────
+  // Icons and style injection
+  // ─────────────────────────────────────────────
+
+  function buildExportIcon(size) {
+    const iconSize = ensureString(size || '18') || '18';
     return `
-<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="icon">
+<svg viewBox="0 0 24 24" width="${iconSize}" height="${iconSize}" aria-hidden="true" class="icon">
   <path d="M12 3v10m0 0 4-4m-4 4-4-4M4 15v4h16v-4"
     fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round"></path>
@@ -1385,6 +1517,189 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     style.id = STYLE_ID;
     style.textContent = styles;
     document.head.appendChild(style);
+  }
+
+  // ─────────────────────────────────────────────
+  // ChatGPT tooltip system
+  // ─────────────────────────────────────────────
+
+  function ensureChatGptTooltipStyles() {
+    if (document.getElementById(CHATGPT_TOOLTIP_STYLE_ID)) {
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = CHATGPT_TOOLTIP_STYLE_ID;
+    style.textContent = `
+.omni-gpt-tooltip-wrapper {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-9999px, -9999px);
+  min-width: max-content;
+  will-change: transform;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.omni-gpt-tooltip {
+  position: relative;
+  z-index: 50;
+  box-sizing: border-box;
+  max-width: 20rem;
+  padding: 4px 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--border-token-border-tooltip, var(--border-tooltip, rgba(255, 255, 255, 0.05)));
+  background: var(--token-bg-tooltip, var(--bg-tooltip, #1b1b1b));
+  opacity: 0;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+
+.omni-gpt-tooltip[data-state="delayed-open"] {
+  opacity: 1;
+}
+
+.omni-gpt-tooltip[data-state="closed"] {
+  opacity: 0;
+}
+
+.omni-gpt-tooltip-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.omni-gpt-tooltip-text {
+  color: var(--text-token-text-primary, var(--text-primary, #fff));
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: pre-wrap;
+  text-align: center;
+}
+`;
+    document.head.appendChild(style);
+  }
+
+  function ensureChatGptTooltip() {
+    ensureChatGptTooltipStyles();
+    if (chatGptTooltip && chatGptTooltip.wrapper && chatGptTooltip.wrapper.isConnected) {
+      return chatGptTooltip;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'omni-gpt-tooltip-wrapper';
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'omni-gpt-tooltip dark';
+    tooltip.setAttribute('data-side', 'bottom');
+    tooltip.setAttribute('data-align', 'center');
+    tooltip.setAttribute('data-state', 'closed');
+
+    const inner = document.createElement('div');
+    inner.className = 'omni-gpt-tooltip-inner';
+
+    const innerWrap = document.createElement('div');
+    const text = document.createElement('div');
+    text.className = 'omni-gpt-tooltip-text';
+
+    innerWrap.appendChild(text);
+    inner.appendChild(innerWrap);
+    tooltip.appendChild(inner);
+    wrapper.appendChild(tooltip);
+    document.body.appendChild(wrapper);
+
+    chatGptTooltip = { wrapper, tooltip, text };
+    return chatGptTooltip;
+  }
+
+  function attachOmniTooltip(button, label) {
+    if (platform !== 'chatgpt' || !button || button.hasAttribute(CHATGPT_TOOLTIP_BOUND_ATTR)) {
+      return;
+    }
+    button.setAttribute(CHATGPT_TOOLTIP_BOUND_ATTR, 'true');
+    button.removeAttribute('title');
+
+    const show = () => showChatGptTooltip(button, label);
+    const hide = () => hideChatGptTooltip();
+
+    button.addEventListener('mouseenter', show);
+    button.addEventListener('focus', show);
+    button.addEventListener('mouseleave', hide);
+    button.addEventListener('blur', hide);
+    button.addEventListener('mousedown', hide, true);
+  }
+
+  function showChatGptTooltip(button, label) {
+    if (!button || !button.isConnected || !button.getBoundingClientRect) {
+      return;
+    }
+    const tooltipParts = ensureChatGptTooltip();
+    tooltipParts.text.textContent = label || 'Export';
+    tooltipParts.tooltip.setAttribute('data-state', 'delayed-open');
+    tooltipParts.wrapper.style.visibility = 'hidden';
+    tooltipParts.wrapper.style.transform = 'translate(-9999px, -9999px)';
+
+    positionChatGptTooltip(button, tooltipParts);
+    tooltipParts.wrapper.style.visibility = 'visible';
+    chatGptTooltipTarget = button;
+    installChatGptTooltipCleanup();
+  }
+
+  function hideChatGptTooltip() {
+    if (!chatGptTooltip) {
+      return;
+    }
+    chatGptTooltip.tooltip.setAttribute('data-state', 'closed');
+    chatGptTooltip.wrapper.style.visibility = 'hidden';
+    chatGptTooltip.wrapper.style.transform = 'translate(-9999px, -9999px)';
+    chatGptTooltipTarget = null;
+    removeChatGptTooltipCleanup();
+  }
+
+  function installChatGptTooltipCleanup() {
+    if (chatGptTooltipCleanup) {
+      return;
+    }
+    const hide = () => hideChatGptTooltip();
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide, true);
+    chatGptTooltipCleanup = () => {
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide, true);
+    };
+  }
+
+  function removeChatGptTooltipCleanup() {
+    if (!chatGptTooltipCleanup) {
+      return;
+    }
+    chatGptTooltipCleanup();
+    chatGptTooltipCleanup = null;
+  }
+
+  function positionChatGptTooltip(button, tooltipParts) {
+    const rect = button.getBoundingClientRect();
+    const tooltipRect = tooltipParts.tooltip.getBoundingClientRect();
+    const width = tooltipRect.width || 64;
+    const height = tooltipRect.height || 24;
+    const padding = 8;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const bottomY = rect.bottom + padding;
+    const topY = rect.top - height - padding;
+    const side = bottomY + height <= viewportHeight - padding || topY < padding ? 'bottom' : 'top';
+    const rawX = rect.left + (rect.width / 2) - (width / 2);
+    const maxX = Math.max(padding, viewportWidth - width - padding);
+    const x = Math.max(padding, Math.min(maxX, rawX));
+    const y = side === 'top'
+      ? Math.max(padding, topY)
+      : Math.min(Math.max(padding, bottomY), Math.max(padding, viewportHeight - height - padding));
+
+    tooltipParts.tooltip.setAttribute('data-side', side);
+    tooltipParts.tooltip.setAttribute('data-align', 'center');
+    tooltipParts.wrapper.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
   function showPdfExportLoader(stage) {
@@ -1553,6 +1868,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  // ─────────────────────────────────────────────
+  // DOM scanning and platform dispatch
+  // ─────────────────────────────────────────────
+
   function queueScanForNode(node) {
     if (!node) {
       return;
@@ -1562,6 +1881,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE) {
+      return;
+    }
+    if (isOmniManagedMutationNode(node)) {
       return;
     }
     const scanRoot = resolveScanRoot(node);
@@ -1581,7 +1903,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
       if (platform === 'gemini') {
         attachGeminiThreadButton(document);
-        roots.forEach((root) => attachGeminiTurnButtons(root));
+        if (roots.length > 30) {
+          attachGeminiTurnButtons(document);
+        } else {
+          roots.forEach((root) => attachGeminiTurnButtons(root));
+        }
         return;
       }
 
@@ -1591,6 +1917,23 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         roots.forEach((root) => attachButtons(root));
       }
     }, 80);
+  }
+
+  function isOmniManagedMutationNode(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE || !node.matches) {
+      return false;
+    }
+    const selector = [
+      `.${EXPORT_BUTTON_CLASS}`,
+      `.${MENU_CLASS}`,
+      `#${PDF_EXPORT_LOADER_ID}`,
+      '.omni-gpt-tooltip-wrapper',
+      `[${GROK_TOOLTIP_PORTAL_ATTR}]`,
+      `[${GEMINI_TOOLTIP_OVERLAY_ATTR}]`,
+      '[data-omni-claude-tooltip]',
+      '[data-omni-claude-bridge-tooltip]'
+    ].join(',');
+    return node.matches(selector) || Boolean(node.closest && node.closest(selector));
   }
 
   function resolveScanRoot(node) {
@@ -1609,9 +1952,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         element;
     }
     if (platform === 'grok') {
-      return element.closest(GROK_HEADER_SELECTOR) ||
-        element.closest(GROK_SHARE_BUTTON_SELECTOR) ||
-        element;
+      return element.closest(GROK_HEADER_SELECTOR) || element;
     }
     if (platform === 'gemini') {
       return element.closest(GEMINI_ACTIONS_SELECTOR) || element;
@@ -1646,6 +1987,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
   }
 
+  // ─────────────────────────────────────────────
+  // ChatGPT buttons
+  // ─────────────────────────────────────────────
+
   function attachChatGptButtons(root) {
     const scope = root || document;
 
@@ -1662,6 +2007,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
     turns.forEach((turn) => {
       if (turn.hasAttribute('data-omni-processed')) {
+        const existingButton = turn.querySelector(`.${EXPORT_BUTTON_CLASS}`);
+        if (existingButton) {
+          attachOmniTooltip(existingButton, 'Export');
+          syncChatGptTurnExportButton(existingButton);
+        }
         return;
       }
 
@@ -1674,15 +2024,90 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       if (!shareButton) {
         return;
       }
-      if (turn.querySelector(`.${EXPORT_BUTTON_CLASS}`)) {
+      const existingButton = turn.querySelector(`.${EXPORT_BUTTON_CLASS}`);
+      if (existingButton) {
+        attachOmniTooltip(existingButton, 'Export');
+        syncChatGptTurnExportButton(existingButton, shareButton);
         turn.setAttribute('data-omni-processed', 'true');
         return;
       }
       const button = buildExportButton('turn');
+      attachOmniTooltip(button, 'Export');
+      syncChatGptTurnExportButton(button, shareButton);
       shareButton.insertAdjacentElement('afterend', button);
       turn.setAttribute('data-omni-processed', 'true');
     });
   }
+
+  function syncChatGptTurnExportButton(button, referenceButton) {
+    if (platform !== 'chatgpt' || !button || button.getAttribute(EXPORT_SCOPE_ATTR) !== 'turn') {
+      return;
+    }
+    const reference = referenceButton || findChatGptTurnColorReference(button);
+    const color = getChatGptTurnReferenceColor(reference) || getChatGptTurnReferenceColor(button);
+    if (!color) {
+      return;
+    }
+    button.querySelectorAll('svg path').forEach((path) => {
+      path.setAttribute('stroke', color);
+      path.style.setProperty('stroke', color, 'important');
+    });
+    installChatGptThemeSyncObserver();
+  }
+
+  function findChatGptTurnColorReference(button) {
+    const group = button && button.closest ? button.closest('[role="group"]') : null;
+    if (!group || !group.querySelectorAll) {
+      return null;
+    }
+    return Array.from(group.querySelectorAll('button.text-token-text-secondary'))
+      .find((candidate) => candidate !== button && !candidate.hasAttribute(EXPORT_SCOPE_ATTR)) || null;
+  }
+
+  function getChatGptTurnReferenceColor(node) {
+    if (!node || !window.getComputedStyle) {
+      return '';
+    }
+    const color = getComputedStyle(node).color;
+    return color && color !== 'rgba(0, 0, 0, 0)' ? color : '';
+  }
+
+  function installChatGptThemeSyncObserver() {
+    if (platform !== 'chatgpt' || chatGptThemeObserver || typeof MutationObserver === 'undefined') {
+      return;
+    }
+    const schedule = () => {
+      if (chatGptThemeSyncQueued) {
+        return;
+      }
+      chatGptThemeSyncQueued = true;
+      requestAnimationFrame(() => {
+        chatGptThemeSyncQueued = false;
+        syncAllChatGptTurnExportButtons();
+        window.setTimeout(syncAllChatGptTurnExportButtons, 120);
+      });
+    };
+    chatGptThemeObserver = new MutationObserver(schedule);
+    [document.documentElement, document.body].filter(Boolean).forEach((node) => {
+      chatGptThemeObserver.observe(node, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      });
+    });
+  }
+
+  function syncAllChatGptTurnExportButtons() {
+    if (platform !== 'chatgpt' || !document.querySelectorAll) {
+      return;
+    }
+    document.querySelectorAll(`.${EXPORT_BUTTON_CLASS}[${EXPORT_SCOPE_ATTR}="turn"]`).forEach((button) => {
+      syncChatGptTurnExportButton(button);
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // Grok message buttons
+  // ─────────────────────────────────────────────
 
   function attachGrokButtons(root) {
     repairGrokExportButtonScopes(root);
@@ -1715,33 +2140,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function collectGrokActionReferenceButtons(root) {
     const scope = root && root.querySelectorAll ? root : document;
-    const buttons = [];
     const seen = new Set();
-    const addButton = (button) => {
+    const buttons = [];
+
+    collectGrokMessageActionReferenceButtons(scope).forEach((button) => {
       if (!isUsableGrokActionButton(button) || seen.has(button)) {
         return;
       }
       seen.add(button);
       buttons.push(button);
-    };
-
-    if (root && root.matches && (root.matches(GROK_SHARE_BUTTON_SELECTOR) || isGrokShareLikeButton(root))) {
-      addButton(root);
-    }
-    if (scope.querySelectorAll) {
-      scope.querySelectorAll(GROK_SHARE_BUTTON_SELECTOR).forEach((button) => {
-        if (isGrokMessageScopedElement(button) || button.closest(GROK_HEADER_SELECTOR)) {
-          addButton(button);
-        }
-      });
-      scope.querySelectorAll('button[aria-label], button[title], button[data-testid], button[data-test-id]').forEach((button) => {
-        if (isGrokShareLikeButton(button) && (isGrokMessageScopedElement(button) || button.closest(GROK_HEADER_SELECTOR))) {
-          addButton(button);
-        }
-      });
-    }
-
-    collectGrokMessageActionReferenceButtons(scope).forEach(addButton);
+    });
     return buttons;
   }
 
@@ -1750,6 +2158,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const actionBars = new Set();
     getGrokMessageRoots().forEach((messageRoot) => {
       if (!isGrokRootInScanScope(messageRoot, scope)) {
+        return;
+      }
+      if (inferGrokRoleFromRoot(messageRoot) === 'user') {
         return;
       }
       Array.from(messageRoot.querySelectorAll('button')).forEach((button) => {
@@ -1770,12 +2181,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         if (isGrokUserActionButtonGroup(actionBar, actionButtons)) {
           return;
         }
-        const shareLikeButton = actionButtons.find(isGrokShareLikeButton);
-        if (!shareLikeButton) {
-          return;
-        }
         actionBars.add(actionBar);
-        references.push(shareLikeButton);
+        references.push(actionButtons[actionButtons.length - 1]);
       });
     });
     return references;
@@ -1833,18 +2240,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!actionBar || !actionButtons || !actionButtons.length) {
       return false;
     }
-    const hasShare = actionButtons.some(isGrokShareLikeButton);
-    if (hasShare) {
-      return false;
-    }
-    return actionButtons.some((button) => {
-      const label = [
-        button.getAttribute('aria-label'),
-        button.getAttribute('title'),
-        button.textContent
-      ].map(ensureString).join(' ');
-      return /edit|modifier|bearbeiten|editar|modificar|измен|編集|수정|تعديل/i.test(label);
-    });
+    const messageRoot = findGrokMessageRootForElement(actionBar);
+    return Boolean(messageRoot && inferGrokRoleFromRoot(messageRoot) === 'user');
   }
 
   function cleanupGrokExportButtons(root) {
@@ -1872,20 +2269,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
-  function isGrokShareLikeButton(button) {
-    if (!button || !button.getAttribute) {
-      return false;
-    }
-    const label = [
-      button.getAttribute('aria-label'),
-      button.getAttribute('title'),
-      button.getAttribute('data-testid'),
-      button.getAttribute('data-test-id'),
-      button.textContent
-    ].map(ensureString).join(' ');
-    return /share|partag|compart|подел|分享|共享|共有|مشارك|teilen|condivid|공유|paylaş|delen|udost|sdil|sdíl|chia sẻ|แบ่งปัน/i.test(label);
-  }
-
   function buildGrokNativeExportButton(referenceButton, scope) {
     const button = referenceButton.cloneNode(true);
     button.removeAttribute('id');
@@ -1901,6 +2284,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('data-state', 'closed');
     button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon()}</span>`;
+    if ((scope || 'turn') === 'turn') {
+      bindGrokOmniTooltip(button);
+    }
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1914,9 +2300,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return;
     }
     button.className = GROK_TURN_EXPORT_CLASS;
+    button.removeAttribute('title');
     button.style.setProperty('margin-bottom', '0', 'important');
     button.style.removeProperty('margin-right');
     syncGrokExportIconSpacing(button);
+    bindGrokOmniTooltip(button);
   }
 
   function buildGrokNativeTurnButton(referenceButton) {
@@ -1938,7 +2326,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!element) {
       return false;
     }
-    return getGrokMessageRoots().some((root) => root && root.contains && root.contains(element));
+    return Boolean(findGrokMessageRootForElement(element));
+  }
+
+  function findGrokMessageRootForElement(element) {
+    if (!element) {
+      return null;
+    }
+    return getGrokMessageRoots().find((root) => root && root.contains && root.contains(element)) || null;
   }
 
   function repairGrokExportButtonScopes(root) {
@@ -1953,7 +2348,12 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  // ─────────────────────────────────────────────
+  // Gemini message buttons
+  // ─────────────────────────────────────────────
+
   function attachGeminiTurnButtons(root) {
+    cleanupDetachedGeminiTooltip();
     const scope = root || document;
     if (!scope.querySelectorAll) {
       return;
@@ -1971,6 +2371,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function attachGeminiTurnButtonToContainer(container) {
+    bindGeminiNativeTooltipSwitch(container);
     const context = getGeminiTurnButtonContext(container);
     if (!context.referenceButton) {
       return;
@@ -1984,8 +2385,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       insertNewGeminiTurnButton(context);
       return;
     }
-    syncGeminiTurnButtonColor(context.existingButton, context.referenceButton);
+    clearGeminiTurnButtonColor(context.existingButton);
     repositionGeminiTurnButton(context);
+    syncGeminiTurnButtonTheme(context.existingButton, context.referenceButton);
   }
 
   function getGeminiTurnButtonContext(container) {
@@ -2049,13 +2451,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!currentHost) {
       return true;
     }
-    return currentHost.hasAttribute('style') ||
-      currentHost.tagName.toLowerCase() !== 'copy-button' ||
+    return currentHost.tagName.toLowerCase() !== 'copy-button' ||
       hasGeminiRuntimeMarkerOnSelf(currentHost);
   }
 
   function insertNewGeminiTurnButton(context) {
     const nativeButton = buildGeminiNativeTurnButton(context.referenceButton);
+    syncGeminiTurnButtonTheme(nativeButton, context.referenceButton);
     if (context.referenceActionHost) {
       insertGeminiButtonWithHost(nativeButton, context.referenceActionHost, 'afterend');
       return;
@@ -2098,12 +2500,41 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function normalizeGeminiTurnButtonHost(wrapper) {
     if (wrapper && wrapper.removeAttribute) {
       wrapper.removeAttribute('style');
+      wrapper.className = 'gem-button gem-button-badge-size-small gem-button-size-small gem-button-type-on-surface lm-enabled';
+      wrapper.setAttribute('theme', 'lm');
+      wrapper.setAttribute('type', 'onSurface');
+      applyImportantStyles(wrapper, {
+        display: 'inline-block',
+        alignItems: 'normal',
+        justifyContent: 'normal',
+        boxSizing: 'content-box',
+        width: '32px',
+        height: '32px',
+        minWidth: '0px',
+        minHeight: '0px',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        padding: '0px',
+        margin: '0px',
+        border: '0px',
+        borderRadius: '9999px',
+        background: 'rgba(0, 0, 0, 0)',
+        opacity: '1',
+        font: '16px Times',
+        verticalAlign: 'baseline',
+        cursor: 'auto',
+        transition: 'all',
+        transform: 'none'
+      });
     }
   }
 
   function repositionGeminiTurnButton(context) {
     const existingWrapper = context.existingButton.closest(`[${GEMINI_TURN_HOST_ATTR}]`) ||
       context.existingButton.closest('.tooltip-anchor-point');
+    if (existingWrapper && existingWrapper.hasAttribute && existingWrapper.hasAttribute(GEMINI_TURN_HOST_ATTR)) {
+      normalizeGeminiTurnButtonHost(existingWrapper);
+    }
     if (context.referenceActionHost) {
       moveGeminiButtonNearAnchor(context.referenceActionHost, 'afterend', context.referenceActionHost.nextElementSibling, existingWrapper, context.existingButton);
       return;
@@ -2223,10 +2654,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         !icon ||
         !/download/i.test(iconName) ||
         iconText ||
-        !button.hasAttribute('mat-button') ||
-        !button.classList.contains('mat-mdc-button') ||
-        button.hasAttribute('mat-icon-button') ||
-        (ripple && !ripple.classList.contains('mdc-button__ripple'))
+        !button.hasAttribute('mat-icon-button') ||
+        !button.classList.contains('mat-mdc-icon-button') ||
+        button.style.getPropertyValue('width') !== '32px' ||
+        (ripple && !ripple.classList.contains('mdc-icon-button__ripple'))
       );
     }
     const referenceUsesMenuStyle = referenceButton.matches(GEMINI_MENU_BUTTON_SELECTOR) ||
@@ -2257,7 +2688,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     button.setAttribute(GEMINI_TURN_NATIVE_ATTR, 'true');
     button.removeAttribute('aria-haspopup');
     button.removeAttribute('aria-expanded');
-    syncGeminiTurnButtonColor(button, referenceButton);
+    clearGeminiTurnButtonColor(button);
+    bindGeminiOmniTooltip(button);
 
     button.addEventListener('click', (event) => {
       event.preventDefault();
@@ -2286,18 +2718,402 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
-  function syncGeminiTurnButtonColor(button, referenceButton) {
-    if (!button || !button.style || !referenceButton || !window.getComputedStyle) {
+  // ─────────────────────────────────────────────
+  // Gemini tooltip system
+  // ─────────────────────────────────────────────
+
+  function ensureGeminiTooltipOverlayContainer() {
+    const existing = document.querySelector('.cdk-overlay-container');
+    if (existing) {
+      return existing;
+    }
+    const container = document.createElement('div');
+    container.className = 'cdk-overlay-container';
+    document.body.appendChild(container);
+    return container;
+  }
+
+  function createGeminiOmniTooltip(button, text) {
+    const overlayContainer = ensureGeminiTooltipOverlayContainer();
+    const waitForNativeTooltip = hasVisibleGeminiNativeTooltips();
+    document.querySelectorAll(`[${GEMINI_TOOLTIP_OVERLAY_ATTR}]`).forEach((node) => node.remove());
+
+    const boundingBox = document.createElement('div');
+    boundingBox.className = 'cdk-overlay-connected-position-bounding-box';
+    boundingBox.setAttribute('dir', 'ltr');
+    boundingBox.setAttribute(GEMINI_TOOLTIP_OVERLAY_ATTR, 'true');
+    boundingBox.style.position = 'fixed';
+    boundingBox.style.left = '0px';
+    boundingBox.style.top = '0px';
+    boundingBox.style.width = '100%';
+    boundingBox.style.height = '100%';
+    boundingBox.style.pointerEvents = 'none';
+
+    const pane = document.createElement('div');
+    pane.id = `cdk-overlay-omni-gemini-${++iconCounter}`;
+    pane.className = 'cdk-overlay-pane mat-mdc-tooltip-panel-below mat-mdc-tooltip-panel';
+    pane.style.position = 'absolute';
+    pane.style.pointerEvents = 'auto';
+    pane.style.transform = 'translateY(8px)';
+    pane.style.visibility = 'hidden';
+
+    const component = document.createElement('mat-tooltip-component');
+    component.setAttribute('aria-hidden', 'true');
+    component.className = 'ng-star-inserted';
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'mdc-tooltip mat-mdc-tooltip gds-body-s gem-tooltip lm-enabled mat-mdc-tooltip-show';
+    tooltip.style.opacity = '0';
+
+    const surface = document.createElement('div');
+    surface.className = 'mat-mdc-tooltip-surface mdc-tooltip__surface';
+    surface.textContent = text;
+    surface.style.userSelect = 'text';
+    tooltip.style.transition = 'opacity 120ms cubic-bezier(0.2, 0, 0, 1), transform 120ms cubic-bezier(0.2, 0, 0, 1)';
+
+    tooltip.appendChild(surface);
+    component.appendChild(tooltip);
+    pane.appendChild(component);
+    boundingBox.appendChild(pane);
+    overlayContainer.appendChild(boundingBox);
+
+    positionGeminiOmniTooltip(button, pane, tooltip, surface);
+    const reveal = () => {
+      if (pane.isConnected) {
+        positionGeminiOmniTooltip(button, pane, tooltip, surface);
+        pane.style.visibility = 'visible';
+        tooltip.style.removeProperty('opacity');
+      }
+    };
+    requestAnimationFrame(() => {
+      if (pane.isConnected) {
+        positionGeminiOmniTooltip(button, pane, tooltip, surface);
+        requestAnimationFrame(() => {
+          if (waitForNativeTooltip) {
+            window.setTimeout(reveal, 45);
+          } else {
+            reveal();
+          }
+        });
+      }
+    });
+    pane.addEventListener('pointerenter', () => {
+      if (!activeGeminiTooltip || activeGeminiTooltip.pane !== pane) {
+        return;
+      }
+      geminiTooltipHovered = true;
+      if (geminiTooltipHideTimer) {
+        window.clearTimeout(geminiTooltipHideTimer);
+        geminiTooltipHideTimer = null;
+      }
+    });
+    pane.addEventListener('pointerleave', () => {
+      if (!activeGeminiTooltip || activeGeminiTooltip.pane !== pane) {
+        return;
+      }
+      geminiTooltipHovered = false;
+      scheduleGeminiOmniTooltipHide();
+    });
+    return { boundingBox, pane, tooltip, surface, button };
+  }
+
+  function getGeminiTooltipAnchorRect(button) {
+    const buttonRect = button.getBoundingClientRect();
+    const host = button.closest ? button.closest(`[${GEMINI_TURN_HOST_ATTR}]`) : null;
+    if (host && host.getBoundingClientRect) {
+      const hostRect = host.getBoundingClientRect();
+      const sameVisualBox =
+        Math.abs(hostRect.width - buttonRect.width) <= 2 &&
+        Math.abs(hostRect.height - buttonRect.height) <= 2;
+      if (sameVisualBox && hostRect.width > 0 && hostRect.height > 0) {
+        return hostRect;
+      }
+    }
+    return buttonRect;
+  }
+
+  function positionGeminiOmniTooltip(button, pane, tooltip, surface) {
+    if (!button || !pane || !tooltip || !button.getBoundingClientRect) {
       return;
     }
-    const referenceIcon = referenceButton.querySelector ? referenceButton.querySelector('mat-icon') : null;
-    const referenceColor = getComputedStyle(referenceIcon || referenceButton).color;
-    if (referenceColor) {
-      button.style.setProperty('--omni-gemini-turn-color', referenceColor);
+    const rect = getGeminiTooltipAnchorRect(button);
+    const surfaceRect = surface && surface.getBoundingClientRect ? surface.getBoundingClientRect() : null;
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const paneRect = pane.getBoundingClientRect();
+    const width = tooltipRect.width || (surfaceRect && surfaceRect.width) || (surface && surface.offsetWidth) || (tooltip && tooltip.offsetWidth) || paneRect.width || 64;
+    const height = tooltipRect.height || (surfaceRect && surfaceRect.height) || (surface && surface.offsetHeight) || (tooltip && tooltip.offsetHeight) || paneRect.height || 26;
+    const padding = 8;
+    let left = rect.left + (rect.width / 2) - (width / 2);
+    let top = rect.bottom;
+    left = Math.max(padding, Math.min((window.innerWidth || document.documentElement.clientWidth || 0) - width - padding, left));
+    if (top + height + 8 > (window.innerHeight || document.documentElement.clientHeight || 0) - padding) {
+      top = Math.max(padding, rect.top - height - 8);
+      pane.classList.remove('mat-mdc-tooltip-panel-below');
+      pane.classList.add('mat-mdc-tooltip-panel-above');
+      pane.style.transform = 'translateY(-8px)';
+    } else {
+      pane.classList.remove('mat-mdc-tooltip-panel-above');
+      pane.classList.add('mat-mdc-tooltip-panel-below');
+      pane.style.transform = 'translateY(8px)';
+    }
+    pane.style.left = `${left}px`;
+    pane.style.top = `${top}px`;
+  }
+
+  function showGeminiOmniTooltip(button) {
+    if (!button || !button.isConnected || (!button.matches(':hover') && document.activeElement !== button)) {
+      return;
+    }
+    if (activeGeminiTooltip && activeGeminiTooltip.button === button) {
+      return;
+    }
+    removeGeminiOmniTooltipNow();
+    activeGeminiTooltip = createGeminiOmniTooltip(button, 'Export');
+  }
+
+  function hasVisibleGeminiNativeTooltips() {
+    if (platform !== 'gemini' || !document.querySelectorAll) {
+      return false;
+    }
+    return Array.from(document.querySelectorAll('.cdk-overlay-pane mat-tooltip-component .mat-mdc-tooltip-show')).some((tooltip) => {
+      if (tooltip.closest && tooltip.closest(`[${GEMINI_TOOLTIP_OVERLAY_ATTR}]`)) {
+        return false;
+      }
+      const rect = tooltip.getBoundingClientRect ? tooltip.getBoundingClientRect() : null;
+      return Boolean(rect && rect.width > 0 && rect.height > 0);
+    });
+  }
+
+  function cleanupDetachedGeminiTooltip() {
+    if (activeGeminiTooltip && (!activeGeminiTooltip.button || !activeGeminiTooltip.button.isConnected)) {
+      removeGeminiOmniTooltipNow();
     }
   }
 
+  function hideGeminiOmniTooltip() {
+    if (geminiTooltipShowTimer) {
+      window.clearTimeout(geminiTooltipShowTimer);
+      geminiTooltipShowTimer = null;
+    }
+    geminiTooltipTargetHovered = false;
+    geminiTooltipHovered = false;
+    closeGeminiOmniTooltip();
+  }
+
+  function scheduleGeminiOmniTooltipHide() {
+    if (geminiTooltipShowTimer) {
+      window.clearTimeout(geminiTooltipShowTimer);
+      geminiTooltipShowTimer = null;
+    }
+    if (geminiTooltipHideTimer) {
+      window.clearTimeout(geminiTooltipHideTimer);
+    }
+    geminiTooltipHideTimer = window.setTimeout(() => {
+      geminiTooltipHideTimer = null;
+      if (!geminiTooltipTargetHovered && !geminiTooltipHovered && document.activeElement !== (activeGeminiTooltip && activeGeminiTooltip.button)) {
+        closeGeminiOmniTooltip();
+      }
+    }, 80);
+  }
+
+  function closeGeminiOmniTooltip() {
+    if (!activeGeminiTooltip) {
+      return;
+    }
+    const tooltip = activeGeminiTooltip;
+    activeGeminiTooltip = null;
+    tooltip.pane.style.pointerEvents = 'none';
+    tooltip.tooltip.classList.remove('mat-mdc-tooltip-show');
+    tooltip.tooltip.classList.add('mat-mdc-tooltip-hide');
+    window.clearTimeout(geminiTooltipHideTimer);
+    geminiTooltipHideTimer = window.setTimeout(() => {
+      removeGeminiTooltipOverlay(tooltip.boundingBox);
+      if (geminiTooltipHideTimer) {
+        geminiTooltipHideTimer = null;
+      }
+    }, GEMINI_TOOLTIP_REMOVE_DELAY_MS);
+  }
+
+  function removeGeminiOmniTooltipNow() {
+    if (geminiTooltipShowTimer) {
+      window.clearTimeout(geminiTooltipShowTimer);
+      geminiTooltipShowTimer = null;
+    }
+    if (geminiTooltipHideTimer) {
+      window.clearTimeout(geminiTooltipHideTimer);
+      geminiTooltipHideTimer = null;
+    }
+    geminiTooltipTargetHovered = false;
+    geminiTooltipHovered = false;
+    if (activeGeminiTooltip) {
+      removeGeminiTooltipOverlay(activeGeminiTooltip.boundingBox);
+      activeGeminiTooltip = null;
+    }
+    document.querySelectorAll(`[${GEMINI_TOOLTIP_OVERLAY_ATTR}]`).forEach(removeGeminiTooltipOverlay);
+  }
+
+  function removeGeminiTooltipOverlay(node) {
+    if (node && node.parentNode) {
+      node.remove();
+    }
+  }
+
+  function bindGeminiNativeTooltipSwitch(container) {
+    if (!container || !container.querySelectorAll) {
+      return;
+    }
+    const nativeButtons = Array.from(container.querySelectorAll('button, gem-icon-button'))
+      .filter((node) => {
+        return node &&
+          !node.hasAttribute(GEMINI_TURN_EXPORT_ATTR) &&
+          !node.hasAttribute(GEMINI_THREAD_EXPORT_ATTR) &&
+          !node.hasAttribute(GEMINI_NATIVE_TOOLTIP_SWITCH_BOUND_ATTR);
+      });
+    const closeForNativeTooltip = () => {
+      if (activeGeminiTooltip || geminiTooltipShowTimer) {
+        removeGeminiOmniTooltipNow();
+      }
+    };
+    nativeButtons.forEach((node) => {
+      node.setAttribute(GEMINI_NATIVE_TOOLTIP_SWITCH_BOUND_ATTR, 'true');
+      node.addEventListener('pointerenter', closeForNativeTooltip);
+      node.addEventListener('focus', closeForNativeTooltip);
+    });
+  }
+
+  function bindGeminiOmniTooltip(button) {
+    if (!button || button.hasAttribute(GEMINI_TOOLTIP_BOUND_ATTR)) {
+      return;
+    }
+    button.setAttribute(GEMINI_TOOLTIP_BOUND_ATTR, 'true');
+    button.removeAttribute('title');
+
+    const show = (event) => {
+      if (event && event.pointerType && event.pointerType !== 'mouse') {
+        return;
+      }
+      geminiTooltipTargetHovered = true;
+      if (geminiTooltipHideTimer) {
+        window.clearTimeout(geminiTooltipHideTimer);
+        geminiTooltipHideTimer = null;
+      }
+      if (geminiTooltipShowTimer) {
+        window.clearTimeout(geminiTooltipShowTimer);
+      }
+      geminiTooltipShowTimer = window.setTimeout(() => {
+        geminiTooltipShowTimer = null;
+        showGeminiOmniTooltip(button);
+      }, GEMINI_TOOLTIP_SHOW_DELAY_MS);
+    };
+    const hide = (event) => {
+      if (event && event.pointerType && event.pointerType !== 'mouse') {
+        return;
+      }
+      geminiTooltipTargetHovered = false;
+      scheduleGeminiOmniTooltipHide();
+    };
+
+    button.addEventListener('pointerenter', show);
+    button.addEventListener('pointerleave', hide);
+    button.addEventListener('focus', show);
+    button.addEventListener('blur', () => {
+      geminiTooltipTargetHovered = false;
+      scheduleGeminiOmniTooltipHide();
+    });
+    button.addEventListener('mousedown', hideGeminiOmniTooltip, true);
+  }
+
+  function clearGeminiTurnButtonColor(button) {
+    if (!button || !button.style) {
+      return;
+    }
+    button.style.removeProperty('--omni-gemini-turn-color');
+  }
+
+  function syncGeminiTurnButtonTheme(button, referenceButton) {
+    if (!button || !window.getComputedStyle) {
+      return;
+    }
+    const reference = referenceButton || findGeminiTurnThemeReference(button);
+    const referenceIcon = reference && reference.querySelector ? reference.querySelector('mat-icon') : null;
+    const color = reference ? getComputedStyle(referenceIcon || reference).color : '';
+    if (!color || color === 'rgba(0, 0, 0, 0)') {
+      return;
+    }
+    applyGeminiTurnColor(button, color);
+    installGeminiThemeSyncObserver();
+  }
+
+  function findGeminiTurnThemeReference(button) {
+    const container = button && button.closest ? button.closest(GEMINI_ACTIONS_SELECTOR) : null;
+    if (!container || !container.querySelectorAll) {
+      return null;
+    }
+    return Array.from(container.querySelectorAll('button.mat-mdc-icon-button'))
+      .find((candidate) => candidate !== button && !candidate.hasAttribute(GEMINI_TURN_EXPORT_ATTR)) || null;
+  }
+
+  function applyGeminiTurnColor(button, color) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    if (button.style) {
+      button.style.setProperty('color', color, 'important');
+    }
+    const host = button.closest ? button.closest(`[${GEMINI_TURN_HOST_ATTR}]`) : null;
+    if (host && host.style) {
+      host.style.setProperty('color', color, 'important');
+    }
+    button.querySelectorAll('mat-icon, svg, svg path').forEach((node) => {
+      if (node.style) {
+        node.style.setProperty('color', color, 'important');
+        node.style.setProperty('fill', color, 'important');
+      }
+    });
+  }
+
+  function installGeminiThemeSyncObserver() {
+    if (platform !== 'gemini' || geminiThemeObserver || typeof MutationObserver === 'undefined') {
+      return;
+    }
+    const schedule = () => {
+      if (geminiThemeSyncQueued) {
+        return;
+      }
+      geminiThemeSyncQueued = true;
+      requestAnimationFrame(() => {
+        geminiThemeSyncQueued = false;
+        syncAllGeminiTurnButtonThemes();
+        window.setTimeout(syncAllGeminiTurnButtonThemes, 120);
+      });
+    };
+    geminiThemeObserver = new MutationObserver(schedule);
+    [document.documentElement, document.body].filter(Boolean).forEach((node) => {
+      geminiThemeObserver.observe(node, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      });
+    });
+  }
+
+  function syncAllGeminiTurnButtonThemes() {
+    if (platform !== 'gemini' || !document.querySelectorAll) {
+      return;
+    }
+    document.querySelectorAll(`[${GEMINI_TURN_EXPORT_ATTR}]`).forEach((button) => {
+      syncGeminiTurnButtonTheme(button);
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // Gemini thread button
+  // ─────────────────────────────────────────────
+
   function attachGeminiThreadButton(root) {
+    if (isGeminiSearchRoute()) {
+      removeGeminiThreadButtons('gemini-search-page');
+      return;
+    }
     if (!hasActiveGeminiThreadContext()) {
       removeGeminiThreadButtons('no-active-conversation');
       return;
@@ -2319,27 +3135,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       const button = existingButton || buildGeminiNativeThreadButton(anchor.referenceButton);
       button.classList.remove('omni-exporter-gemini-floating');
       button.removeAttribute(GEMINI_THREAD_FALLBACK_ATTR);
+      syncGeminiThreadButtonColor(button, anchor.referenceButton);
       placeGeminiThreadButton(button, anchor);
       logGeminiThreadInjection('anchored', anchor.name);
       return;
     }
 
-    const fallbackHost = getGeminiThreadFallbackHost();
-    if (!fallbackHost) {
-      logGeminiThreadInjection('missing-fallback-host', 'document.body is not available yet');
-      return;
-    }
-
-    if (existingButton && !existingIsFallback) {
-      existingButton.remove();
-      existingButton = null;
-    }
-
-    const button = existingButton || buildGeminiFloatingThreadButton();
-    if (button.parentElement !== fallbackHost) {
-      fallbackHost.appendChild(button);
-    }
-    logGeminiThreadInjection('floating-fallback', 'no stable Gemini header anchor found');
+    removeGeminiThreadButtons('waiting-for-gemini-header-anchor');
+    logGeminiThreadInjection('skip-floating-fallback', 'waiting for a stable Gemini header anchor');
   }
 
   function getPrimaryGeminiThreadButton() {
@@ -2361,6 +3164,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function hasActiveGeminiThreadContext() {
+    if (isGeminiSearchRoute()) {
+      return false;
+    }
     const conversations = Array.from(document.querySelectorAll(GEMINI_CONVERSATION_SELECTOR));
     if (conversations.some(hasExportableGeminiConversationContent)) {
       return true;
@@ -2370,6 +3176,27 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return Boolean(normalizeText(main.textContent || '') || nodeHasExportableImages(main));
     }
     return Boolean(getGeminiConversationIdFromLocation());
+  }
+
+  function hasStableGeminiThreadFallbackContext() {
+    if (getGeminiConversationIdFromLocation()) {
+      return true;
+    }
+    const main = document.querySelector('main') || document.body;
+    return Boolean(main && main.querySelector('model-response, message-content'));
+  }
+
+  function getGeminiRouteParts() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'u' && /^\d+$/.test(parts[1] || '')) {
+      return parts.slice(2);
+    }
+    return parts;
+  }
+
+  function isGeminiSearchRoute() {
+    const parts = getGeminiRouteParts();
+    return parts[0] === 'search';
   }
 
   function hasExportableGeminiConversationContent(conversation) {
@@ -2383,7 +3210,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function getGeminiConversationIdFromLocation() {
-    const parts = location.pathname.split('/').filter(Boolean);
+    const parts = getGeminiRouteParts();
     if (parts[0] !== 'app' || !parts[1]) {
       return '';
     }
@@ -2509,7 +3336,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     const preferredSelectors = [
       GEMINI_THREAD_SHARE_BUTTON_SELECTOR,
-      'button[aria-label*="Share"], button[aria-label*="Partager"]',
       GEMINI_MENU_BUTTON_SELECTOR,
       'button.mat-mdc-icon-button'
     ];
@@ -2530,10 +3356,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return false;
     }
     if (button.matches && button.matches(GEMINI_NON_CONVERSATION_ACTION_SELECTOR)) {
-      return false;
-    }
-    const text = ensureString(button.textContent).trim();
-    if (/Google AI|Plus|Pro|Upgrade|Passez|Mettre à niveau|Install|Installer/i.test(text)) {
       return false;
     }
     return isSafeGeminiThreadAnchor(button);
@@ -2619,11 +3441,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!button || !button.hasAttribute(GEMINI_THREAD_NATIVE_ATTR)) {
       return false;
     }
-    const text = ensureString(button.textContent).trim();
     return Boolean(
       button.querySelector('.dynamic-upsell-label, .mdc-button__label') ||
-      button.closest(GEMINI_UPSELL_SELECTOR) ||
-      /Google AI|Plus|Pro|Upgrade|Passez|Mettre à niveau|Install|Installer/i.test(text)
+      button.closest(GEMINI_UPSELL_SELECTOR)
     );
   }
 
@@ -2644,6 +3464,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     button.setAttribute(GEMINI_THREAD_NATIVE_ATTR, 'true');
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
+    syncGeminiThreadButtonColor(button, referenceButton);
     syncGeminiThreadIconSpacing(button);
 
     button.addEventListener('click', (event) => {
@@ -2665,15 +3486,28 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  function syncGeminiThreadButtonColor(button, referenceButton) {
+    if (!button || !button.style || !referenceButton || !window.getComputedStyle) {
+      return;
+    }
+    const referenceIcon = referenceButton.querySelector ? referenceButton.querySelector('mat-icon') : null;
+    const referenceColor = getComputedStyle(referenceIcon || referenceButton).color;
+    if (referenceColor) {
+      button.style.setProperty('--omni-gemini-thread-color', referenceColor);
+    }
+  }
+
   function createGeminiNativeTurnIconButton() {
     const button = document.createElement('button');
-    button.className = 'mdc-button mat-mdc-button-base mat-mdc-tooltip-trigger icon-button mat-mdc-button mat-unthemed';
-    button.setAttribute('mat-button', '');
+    button.className = 'mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-badge mat-unthemed mat-badge-overlap mat-badge-above mat-badge-after mat-badge-small mat-badge-hidden';
+    button.setAttribute('mat-icon-button', '');
+    button.setAttribute('matbadgeposition', 'after');
     button.setAttribute('tabindex', '0');
     button.setAttribute('mat-ripple-loader-class-name', 'mat-mdc-button-ripple');
-    button.appendChild(createGeminiTurnButtonPart('span', 'mat-mdc-button-persistent-ripple mdc-button__ripple'));
+    button.setAttribute('mat-ripple-loader-centered', '');
+    applyGeminiTurnButtonInlineStyle(button);
+    button.appendChild(createGeminiTurnButtonPart('span', 'mat-mdc-button-persistent-ripple mdc-icon-button__ripple'));
     button.appendChild(createGeminiTurnDownloadIcon());
-    button.appendChild(createGeminiTurnButtonPart('span', 'mdc-button__label'));
     button.appendChild(createGeminiTurnButtonPart('span', 'mat-focus-indicator'));
     button.appendChild(createGeminiTurnButtonPart('span', 'mat-mdc-button-touch-target'));
     button.appendChild(createGeminiTurnButtonPart('span', 'mat-ripple mat-mdc-button-ripple'));
@@ -2725,6 +3559,35 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function createGeminiTurnButtonPart(tagName, className) {
     const part = document.createElement(tagName);
     part.className = className;
+    if (className.includes('mat-mdc-button-persistent-ripple')) {
+      applyImportantStyles(part, {
+        display: 'block',
+        position: 'absolute',
+        inset: '0px',
+        width: '32px',
+        height: '32px',
+        borderRadius: '9999px',
+        background: 'rgba(0, 0, 0, 0)',
+        opacity: '1',
+        pointerEvents: 'none',
+        transition: 'all',
+        transform: 'none'
+      });
+    } else if (className.includes('mat-mdc-button-touch-target')) {
+      applyImportantStyles(part, {
+        display: 'none',
+        position: 'absolute',
+        inset: '50% auto auto 50%',
+        width: '48px',
+        height: '48px',
+        borderRadius: '0px',
+        background: 'rgba(0, 0, 0, 0)',
+        opacity: '1',
+        pointerEvents: 'auto',
+        transition: 'all',
+        transform: 'none'
+      });
+    }
     return part;
   }
 
@@ -2736,7 +3599,67 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     matIcon.setAttribute('aria-hidden', 'true');
     matIcon.setAttribute('data-mat-icon-type', 'font');
     matIcon.setAttribute('data-mat-icon-name', 'download');
+    applyImportantStyles(matIcon, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxSizing: 'content-box',
+      width: '20px',
+      height: '20px',
+      minWidth: 'auto',
+      minHeight: 'fit-content',
+      maxWidth: 'none',
+      maxHeight: 'none',
+      fontSize: '20px',
+      lineHeight: '20px',
+      stroke: 'none',
+      opacity: '1',
+      overflow: 'hidden',
+      verticalAlign: 'baseline',
+      transition: 'all',
+      transform: 'none'
+    });
     return matIcon;
+  }
+
+  function applyGeminiTurnButtonInlineStyle(button) {
+    applyImportantStyles(button, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      boxSizing: 'border-box',
+      width: '32px',
+      height: '32px',
+      minWidth: '0px',
+      minHeight: '0px',
+      maxWidth: 'none',
+      maxHeight: 'none',
+      padding: '4px',
+      margin: '0px',
+      border: '0px',
+      borderRadius: '9999px',
+      overflow: 'visible',
+      background: 'rgba(0, 0, 0, 0)',
+      boxShadow: 'none',
+      font: '24px Arial',
+      letterSpacing: 'normal',
+      textAlign: 'center',
+      verticalAlign: 'baseline',
+      cursor: 'pointer',
+      transition: 'all',
+      transform: 'none',
+      opacity: '1'
+    });
+  }
+
+  function applyImportantStyles(element, stylesMap) {
+    if (!element || !element.style || !stylesMap) {
+      return;
+    }
+    Object.entries(stylesMap).forEach(([property, value]) => {
+      element.style.setProperty(property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`), value, 'important');
+    });
   }
 
   function hasGeminiRuntimeMarkerOnSelf(node) {
@@ -2821,6 +3744,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     ) && !referenceButton.classList.contains('mdc-icon-button');
   }
 
+  // ─────────────────────────────────────────────
+  // Grok thread button and tooltip system
+  // ─────────────────────────────────────────────
+
   function attachGrokThreadButton(root) {
     let existingButton = getPrimaryGrokThreadButton();
     removeDuplicateGrokThreadButtons(existingButton);
@@ -2840,8 +3767,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       existingButton = null;
     }
 
-    const shareButton = findGrokHeaderShareButton(header);
-    const referenceButton = shareButton || findGrokHeaderReferenceButton(header);
+    const referenceButton = findGrokHeaderReferenceButton(header);
     if (!referenceButton) {
       return;
     }
@@ -2849,20 +3775,22 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const button = existingButton || buildGrokThreadExportButton();
     syncGrokThreadExportButton(button);
 
-    if (shareButton) {
-      if (shareButton.previousElementSibling !== button) {
-        shareButton.insertAdjacentElement('beforebegin', button);
-      }
-    } else {
-      if (header.firstElementChild !== button) {
-        header.insertBefore(button, header.firstChild);
-      }
+    if (activeMenu && activeMenuButton === button) {
+      return;
+    }
+
+    if (referenceButton.previousElementSibling !== button) {
+      referenceButton.insertAdjacentElement('beforebegin', button);
     }
   }
 
   function getPrimaryGrokThreadButton() {
     const buttons = Array.from(document.querySelectorAll(`[${GROK_THREAD_EXPORT_ATTR}]`));
-    return buttons.find((button) => !button.hasAttribute(GROK_EXPORT_ATTR)) || buttons[0] || null;
+    return buttons.find((button) => {
+      return button.hasAttribute(GROK_EXPORT_ATTR) &&
+        button.getAttribute(EXPORT_SCOPE_ATTR) === 'thread' &&
+        !isGrokMessageScopedElement(button);
+    }) || buttons.find((button) => !isGrokMessageScopedElement(button)) || buttons[0] || null;
   }
 
   function removeDuplicateGrokThreadButtons(primaryButton) {
@@ -2887,17 +3815,365 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!button) {
       return;
     }
-    button.className = GROK_THREAD_EXPORT_CLASS;
-    button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon()}</span>`;
-    button.style.setProperty('margin-bottom', '0', 'important');
-    button.setAttribute('aria-label', 'Exporter la conversation');
-    button.setAttribute('type', 'button');
+    if (button.className !== GROK_THREAD_EXPORT_CLASS) {
+      button.className = GROK_THREAD_EXPORT_CLASS;
+    }
+    if (!isGrokThreadIconMarkupCurrent(button)) {
+      button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon('20')}</span>`;
+    }
+    if (button.style.getPropertyValue('margin-bottom') !== '0px') {
+      button.style.setProperty('margin-bottom', '0', 'important');
+    }
+    setAttributeIfChanged(button, 'aria-label', 'Exporter la conversation');
+    setAttributeIfChanged(button, 'type', 'button');
+    setAttributeIfChanged(button, 'data-state', 'closed');
+    setAttributeIfChanged(button, 'aria-haspopup', 'menu');
+    button.removeAttribute('title');
+    if (!activeMenu || activeMenuButton !== button) {
+      setAttributeIfChanged(button, 'aria-expanded', 'false');
+    }
+    setAttributeIfChanged(button, GROK_EXPORT_ATTR, 'true');
+    setAttributeIfChanged(button, GROK_THREAD_EXPORT_ATTR, 'true');
+    bindGrokOmniTooltip(button);
+  }
+
+  function isGrokThreadIconMarkupCurrent(button) {
+    if (!button || !button.querySelector) {
+      return false;
+    }
+    const span = button.firstElementChild;
+    const svg = span && span.querySelector ? span.querySelector('svg') : null;
+    return Boolean(
+      span &&
+      span.tagName &&
+      span.tagName.toLowerCase() === 'span' &&
+      svg &&
+      svg.getAttribute('width') === '20' &&
+      svg.getAttribute('height') === '20'
+    );
+  }
+
+  function ensureGrokTooltipPortal() {
+    const existing = document.getElementById('tooltip-portal');
+    if (existing) {
+      return existing;
+    }
+    const portal = document.createElement('div');
+    portal.id = 'tooltip-portal';
+    document.body.appendChild(portal);
+    return portal;
+  }
+
+  function createGrokOmniTooltip(button, text) {
+    const portal = ensureGrokTooltipPortal();
+    document.querySelectorAll(`[${GROK_TOOLTIP_PORTAL_ATTR}]`).forEach((node) => node.remove());
+    const tooltipId = `radix-_omni_grok_${++iconCounter}_`;
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-radix-popper-content-wrapper', '');
+    wrapper.setAttribute(GROK_TOOLTIP_PORTAL_ATTR, 'true');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '0px';
+    wrapper.style.top = '0px';
+    wrapper.style.minWidth = 'max-content';
+    wrapper.style.setProperty('--radix-popper-transform-origin', '50% 0px');
+    wrapper.style.willChange = 'transform';
+    wrapper.style.zIndex = 'auto';
+
+    const content = document.createElement('div');
+    content.id = tooltipId;
+    content.setAttribute('data-side', 'bottom');
+    content.setAttribute('data-align', 'center');
+    content.setAttribute('data-state', 'delayed-open');
+    content.className = 'overflow-hidden rounded-lg bg-popover shadow-sm dark:shadow-none px-3 py-1.5 border border-border-l1 text-xs text-fg-primary pointer-events-none max-w-80 text-wrap animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2';
+    content.style.setProperty('--radix-tooltip-content-transform-origin', 'var(--radix-popper-transform-origin)');
+    content.style.setProperty('--radix-tooltip-content-available-width', 'var(--radix-popper-available-width)');
+    content.style.setProperty('--radix-tooltip-content-available-height', 'var(--radix-popper-available-height)');
+    content.style.setProperty('--radix-tooltip-trigger-width', 'var(--radix-popper-anchor-width)');
+    content.style.setProperty('--radix-tooltip-trigger-height', 'var(--radix-popper-anchor-height)');
+
+    const visibleText = document.createElement('p');
+    visibleText.textContent = text;
+    content.appendChild(visibleText);
+
+    const srText = document.createElement('span');
+    srText.setAttribute('role', 'tooltip');
+    srText.style.position = 'absolute';
+    srText.style.border = '0px';
+    srText.style.width = '1px';
+    srText.style.height = '1px';
+    srText.style.padding = '0px';
+    srText.style.margin = '-1px';
+    srText.style.overflow = 'hidden';
+    srText.style.clip = 'rect(0px, 0px, 0px, 0px)';
+    srText.style.whiteSpace = 'nowrap';
+    srText.style.overflowWrap = 'normal';
+
+    const srParagraph = document.createElement('p');
+    srParagraph.textContent = text;
+    srText.appendChild(srParagraph);
+    content.appendChild(srText);
+
+    wrapper.appendChild(content);
+    portal.appendChild(wrapper);
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const rect = button.getBoundingClientRect();
+    const tooltipRect = content.getBoundingClientRect();
+    const tooltipWidth = tooltipRect.width || wrapper.getBoundingClientRect().width || 64;
+    const tooltipHeight = tooltipRect.height || wrapper.getBoundingClientRect().height || 28;
+    const padding = 16;
+    const sideOffset = 4;
+    const bottomAvailable = viewportHeight - padding - rect.bottom - sideOffset;
+    const topAvailable = rect.top - padding - sideOffset;
+    const side = bottomAvailable >= tooltipHeight ? 'bottom' : 'top';
+    const x = Math.max(padding, Math.min(viewportWidth - tooltipWidth - padding, rect.left + (rect.width / 2) - (tooltipWidth / 2)));
+    const preferredY = side === 'top'
+      ? rect.top - tooltipHeight - sideOffset
+      : rect.bottom + sideOffset;
+    const y = Math.max(padding, Math.min(viewportHeight - tooltipHeight - padding, preferredY));
+    content.setAttribute('data-side', side);
+    wrapper.style.transform = `translate(${x}px, ${y}px)`;
+    wrapper.style.setProperty('--radix-popper-transform-origin', side === 'top' ? `50% ${Math.round(tooltipHeight)}px` : '50% 0px');
+    wrapper.style.setProperty('--radix-popper-available-width', `${Math.max(0, window.innerWidth - padding * 2)}px`);
+    wrapper.style.setProperty('--radix-popper-available-height', `${Math.max(0, side === 'top' ? topAvailable : bottomAvailable)}px`);
+    wrapper.style.setProperty('--radix-popper-anchor-width', `${Math.round(rect.width)}px`);
+    wrapper.style.setProperty('--radix-popper-anchor-height', `${Math.round(rect.height)}px`);
+
+    button.setAttribute('aria-describedby', tooltipId);
+    button.setAttribute('data-state', 'delayed-open');
+
+    return { wrapper, content, button, tooltipId };
+  }
+
+  function showGrokOmniTooltip(button) {
+    if (!button || !button.isConnected || grokTooltipTarget !== button || !button.matches(':hover')) {
+      return;
+    }
+    if (activeGrokTooltip && activeGrokTooltip.button === button) {
+      return;
+    }
+    removeGrokOmniTooltipNow();
+    activeGrokTooltip = createGrokOmniTooltip(button, 'Export');
+    installGrokTooltipScrollDismiss(button);
+  }
+
+  function hideGrokOmniTooltip() {
+    grokTooltipCycle += 1;
+    grokTooltipTarget = null;
+    if (grokTooltipShowTimer) {
+      window.clearTimeout(grokTooltipShowTimer);
+      grokTooltipShowTimer = null;
+    }
+    cleanupGrokTooltipScrollDismiss();
+    cleanupGrokTooltipAnchorDismiss();
+    if (!activeGrokTooltip) {
+      return;
+    }
+    const tooltip = activeGrokTooltip;
+    activeGrokTooltip = null;
+    if (tooltip.button && tooltip.button.isConnected) {
+      tooltip.button.removeAttribute('aria-describedby');
+      tooltip.button.setAttribute('data-state', 'closed');
+    }
+    tooltip.content.style.animationFillMode = 'forwards';
+    tooltip.content.setAttribute('data-state', 'closed');
+    scheduleGrokTooltipRemoval(tooltip);
+  }
+
+  function removeGrokOmniTooltipNow() {
+    cleanupGrokTooltipScrollDismiss();
+    cleanupGrokTooltipAnchorDismiss();
+    if (grokTooltipHideTimer) {
+      window.clearTimeout(grokTooltipHideTimer);
+      grokTooltipHideTimer = null;
+    }
+    if (activeGrokTooltip && activeGrokTooltip.wrapper) {
+      if (activeGrokTooltip.button && activeGrokTooltip.button.isConnected) {
+        activeGrokTooltip.button.removeAttribute('aria-describedby');
+        activeGrokTooltip.button.setAttribute('data-state', 'closed');
+      }
+      removeGrokTooltipWrapper(activeGrokTooltip.wrapper);
+      activeGrokTooltip = null;
+    }
+    document.querySelectorAll(`[${GROK_TOOLTIP_PORTAL_ATTR}]`).forEach(removeGrokTooltipWrapper);
+  }
+
+  function isGrokThreadTooltipButton(button) {
+    return Boolean(button && (
+      button.hasAttribute(GROK_THREAD_EXPORT_ATTR) ||
+      button.getAttribute(EXPORT_SCOPE_ATTR) === 'thread'
+    ));
+  }
+
+  function installGrokTooltipScrollDismiss(button) {
+    cleanupGrokTooltipScrollDismiss();
+    installGrokTooltipAnchorDismiss(button);
+    if (!button) {
+      return;
+    }
+    const onScroll = () => {
+      hideGrokOmniTooltip();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    grokTooltipScrollCleanup = () => {
+      window.removeEventListener('scroll', onScroll, true);
+      grokTooltipScrollCleanup = null;
+    };
+  }
+
+  function cleanupGrokTooltipScrollDismiss() {
+    if (grokTooltipScrollCleanup) {
+      grokTooltipScrollCleanup();
+    }
+  }
+
+  function getGrokTooltipAnchorSnapshot(button) {
+    const rect = button.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      viewportWidth: window.innerWidth || document.documentElement.clientWidth || 0,
+      viewportHeight: window.innerHeight || document.documentElement.clientHeight || 0,
+      dpr: window.devicePixelRatio || 1
+    };
+  }
+
+  function installGrokTooltipAnchorDismiss(button) {
+    cleanupGrokTooltipAnchorDismiss();
+    if (!button) {
+      return;
+    }
+    let frame = 0;
+    let snapshot = getGrokTooltipAnchorSnapshot(button);
+    const moved = (current) => {
+      return Math.abs(current.left - snapshot.left) > 1 ||
+        Math.abs(current.top - snapshot.top) > 1 ||
+        Math.abs(current.width - snapshot.width) > 1 ||
+        Math.abs(current.height - snapshot.height) > 1;
+    };
+    const viewportChanged = (current) => {
+      return Math.abs(current.viewportWidth - snapshot.viewportWidth) > 1 ||
+        Math.abs(current.viewportHeight - snapshot.viewportHeight) > 1 ||
+        Math.abs(current.dpr - snapshot.dpr) > 0.001;
+    };
+    const tick = () => {
+      const isCurrentButton = grokTooltipTarget === button ||
+        (activeGrokTooltip && activeGrokTooltip.button === button);
+      if (!button.isConnected || !isCurrentButton) {
+        cleanupGrokTooltipAnchorDismiss();
+        return;
+      }
+      const current = getGrokTooltipAnchorSnapshot(button);
+      if (viewportChanged(current)) {
+        snapshot = current;
+      } else if (moved(current)) {
+        hideGrokOmniTooltip();
+        return;
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    grokTooltipAnchorCleanup = () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      frame = 0;
+      grokTooltipAnchorCleanup = null;
+    };
+  }
+
+  function cleanupGrokTooltipAnchorDismiss() {
+    if (grokTooltipAnchorCleanup) {
+      grokTooltipAnchorCleanup();
+    }
+  }
+
+  function getGrokTooltipDelay(button) {
+    return isGrokThreadTooltipButton(button) ? GROK_THREAD_TOOLTIP_DELAY_MS : GROK_TOOLTIP_DELAY_MS;
+  }
+
+  function scheduleGrokTooltipRemoval(tooltip) {
+    let removed = false;
+    let removalTimer = null;
+    const remove = () => {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      if (removalTimer) {
+        window.clearTimeout(removalTimer);
+      }
+      if (grokTooltipHideTimer === removalTimer) {
+        grokTooltipHideTimer = null;
+      }
+      if (tooltip.content) {
+        tooltip.content.removeEventListener('animationend', remove);
+        tooltip.content.removeEventListener('animationcancel', remove);
+      }
+      removeGrokTooltipWrapper(tooltip.wrapper);
+    };
+    window.clearTimeout(grokTooltipHideTimer);
+    tooltip.content.addEventListener('animationend', remove);
+    tooltip.content.addEventListener('animationcancel', remove);
+    removalTimer = window.setTimeout(remove, GROK_TOOLTIP_CLOSE_MS);
+    grokTooltipHideTimer = removalTimer;
+  }
+
+  function removeGrokTooltipWrapper(wrapper) {
+    if (wrapper && wrapper.parentNode) {
+      wrapper.remove();
+    }
+  }
+
+  function bindGrokOmniTooltip(button) {
+    if (!button || button.hasAttribute(GROK_TOOLTIP_BOUND_ATTR)) {
+      return;
+    }
+    button.setAttribute(GROK_TOOLTIP_BOUND_ATTR, 'true');
+    button.removeAttribute('title');
+    button.removeAttribute('aria-describedby');
     button.setAttribute('data-state', 'closed');
-    button.setAttribute('aria-haspopup', 'menu');
-    button.setAttribute('aria-expanded', 'false');
-    button.setAttribute(GROK_EXPORT_ATTR, 'true');
-    button.setAttribute(GROK_THREAD_EXPORT_ATTR, 'true');
-    syncGrokExportIconSpacing(button);
+
+    const show = (event) => {
+      if (event && event.pointerType && event.pointerType !== 'mouse') {
+        return;
+      }
+      const cycle = grokTooltipCycle + 1;
+      grokTooltipCycle = cycle;
+      grokTooltipTarget = button;
+      installGrokTooltipScrollDismiss(button);
+      if (grokTooltipShowTimer) {
+        window.clearTimeout(grokTooltipShowTimer);
+      }
+      grokTooltipShowTimer = window.setTimeout(() => {
+        grokTooltipShowTimer = null;
+        if (grokTooltipCycle === cycle && grokTooltipTarget === button && button.isConnected && button.matches(':hover')) {
+          showGrokOmniTooltip(button);
+        }
+      }, getGrokTooltipDelay(button));
+    };
+    const hide = (event) => {
+      if (event && event.pointerType && event.pointerType !== 'mouse') {
+        return;
+      }
+      if (grokTooltipTarget === button || activeGrokTooltip) {
+        hideGrokOmniTooltip();
+      }
+    };
+
+    button.addEventListener('pointerenter', show);
+    button.addEventListener('pointerleave', hide);
+    button.addEventListener('mousedown', hide, true);
+  }
+
+  function setAttributeIfChanged(element, name, value) {
+    if (element.getAttribute(name) !== value) {
+      element.setAttribute(name, value);
+    }
   }
 
   function syncGrokExportIconSpacing(button) {
@@ -2943,6 +4219,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function findGrokThreadHeader(root) {
+    const actionHeader = findGrokThreadActionHeader(root);
+    if (actionHeader) {
+      return actionHeader;
+    }
+
     if (root && root.closest) {
       const scopedHeader = root.closest(GROK_HEADER_SELECTOR);
       if (scopedHeader && isUsableGrokThreadHeader(scopedHeader)) {
@@ -2953,14 +4234,64 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (isUsableGrokThreadHeader(exactHeader)) {
       return exactHeader;
     }
+    return findGrokThreadHeaderFallback(root);
+  }
+
+  function findGrokThreadActionHeader(root) {
+    const scopes = [];
+    if (root && root.querySelectorAll) {
+      scopes.push(root);
+    }
+    scopes.push(document);
+
+    for (const scope of scopes) {
+      const candidates = [];
+      if (scope.matches && scope.matches('.flex.shrink-0.flex-row.items-center.gap-1\\.5')) {
+        candidates.push(scope);
+      }
+      candidates.push(...Array.from(scope.querySelectorAll('.flex.shrink-0.flex-row.items-center.gap-1\\.5')));
+      const found = candidates.find(isGrokThreadActionContainer);
+      if (found) {
+        return found;
+      }
+    }
     return null;
   }
 
-  function findGrokHeaderShareButton(header) {
-    if (!header || !header.querySelectorAll) {
-      return null;
+  function findGrokThreadHeaderFallback(root) {
+    const candidates = [];
+    const seen = new Set();
+    const addCandidate = (node) => {
+      if (!node || seen.has(node)) {
+        return;
+      }
+      seen.add(node);
+      candidates.push(node);
+    };
+    const addButtonParents = (scope) => {
+      if (!scope || !scope.querySelectorAll) {
+        return;
+      }
+      Array.from(scope.querySelectorAll('button')).forEach((button) => {
+        let node = button.parentElement;
+        for (let depth = 0; node && depth < 3; depth += 1, node = node.parentElement) {
+          addCandidate(node);
+        }
+      });
+    };
+
+    if (root && root.querySelectorAll) {
+      addButtonParents(root);
     }
-    return Array.from(header.querySelectorAll('button')).find(isGrokShareLikeButton) || null;
+    addButtonParents(document);
+
+    return candidates
+      .filter(isLikelyGrokThreadHeader)
+      .sort((a, b) => {
+        const rectA = getElementRectSafe(a);
+        const rectB = getElementRectSafe(b);
+        return ((rectA && rectA.top) || 0) - ((rectB && rectB.top) || 0);
+      })[0] || null;
   }
 
   function findGrokHeaderReferenceButton(header) {
@@ -2968,16 +4299,17 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return null;
     }
     const buttons = Array.from(header.querySelectorAll('button')).filter(isUsableGrokActionButton);
-    return buttons.find((button) => /plus|more|menu|dots|ellipsis|options|más|mas|mehr|altro|ещ|ещё|المزيد|その他|更多/i.test([
-      button.getAttribute('aria-label'),
-      button.getAttribute('title'),
-      button.getAttribute('data-testid'),
-      button.getAttribute('data-test-id')
-    ].map(ensureString).join(' '))) || buttons[0] || null;
+    return buttons.find((button) => button.parentElement === header) || buttons[0] || null;
   }
 
   function isUsableGrokThreadHeader(node) {
     if (!node || !node.isConnected || !node.querySelector) {
+      return false;
+    }
+    if (node.matches && node.matches('[data-sidebar]')) {
+      return false;
+    }
+    if (node.closest && node.closest('[data-sidebar]')) {
       return false;
     }
     if (node.closest && node.closest('form, textarea, pre, code, [contenteditable="true"]')) {
@@ -2991,6 +4323,45 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return false;
     }
     return isVisibleGrokElement(node);
+  }
+
+  function isLikelyGrokThreadHeader(node) {
+    if (!isUsableGrokThreadHeader(node)) {
+      return false;
+    }
+    if (isGrokThreadActionContainer(node)) {
+      return true;
+    }
+    if (isGrokMessageScopedElement(node)) {
+      return false;
+    }
+    const rect = getElementRectSafe(node);
+    if (!rect || rect.top < -8 || rect.top > 140) {
+      return false;
+    }
+    const className = ensureString(node.className);
+    const classHints = ['absolute', 'fixed', 'sticky', 'ms-auto', 'right-', 'end-', 'top-'];
+    return classHints.some((hint) => className.includes(hint));
+  }
+
+  function isGrokThreadActionContainer(node) {
+    if (!isUsableGrokThreadHeader(node) || isGrokMessageScopedElement(node)) {
+      return false;
+    }
+    const className = ensureString(node.className);
+    if (
+      !className.includes('flex') ||
+      !className.includes('shrink-0') ||
+      !className.includes('flex-row') ||
+      !className.includes('items-center') ||
+      !className.includes('gap-1.5')
+    ) {
+      return false;
+    }
+    const directButtons = Array.from(node.children).filter((child) => {
+      return child && child.matches && child.matches('button') && isUsableGrokActionButton(child);
+    });
+    return directButtons.length >= 1 && directButtons.length <= 4;
   }
 
   function isVisibleGrokElement(node) {
@@ -3016,20 +4387,29 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Claude buttons
+  // ─────────────────────────────────────────────
+
   function attachClaudeThreadButton(root) {
     const scope = root || document;
     const header = scope.matches && scope.matches(CLAUDE_HEADER_SELECTOR)
       ? scope
       : scope.querySelector(CLAUDE_HEADER_SELECTOR);
-    if (!header || header.querySelector(`[${CLAUDE_THREAD_EXPORT_ATTR}]`)) {
+    if (!header) {
+      return;
+    }
+    const existingButton = header.querySelector(`[${CLAUDE_THREAD_EXPORT_ATTR}]`);
+    if (existingButton) {
+      configureClaudeThreadExportButton(existingButton, header);
       return;
     }
     const shareButton = header.querySelector(CLAUDE_SHARE_SELECTOR);
-    const referenceButton = shareButton || header.querySelector('button');
     const button = buildExportButton('thread', {
-      extraClasses: referenceButton ? referenceButton.className : ''
+      overrideClassName: getClaudeThreadExportButtonClass()
     });
     button.setAttribute(CLAUDE_THREAD_EXPORT_ATTR, 'true');
+    configureClaudeThreadExportButton(button, header);
     if (shareButton) {
       shareButton.insertAdjacentElement('beforebegin', button);
     } else {
@@ -3037,11 +4417,63 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
   }
 
+  function getClaudeThreadExportButtonClass() {
+    return 'omni-exporter-btn cds-reset group/btn relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap select-none ' +
+      'cursor-[var(--cds-cursor-interactive)] aria-disabled:cursor-default data-[disabled]:cursor-default border-0 outline-none rounded h-control ' +
+      'font-sans text-body font-medium [&:disabled:not([aria-busy])]:opacity-50 disabled:pointer-events-none transition-shadow duration-fast ' +
+      'focus-visible:shadow-focus text-primary aria-pressed:text-accent aspect-square w-control px-0';
+  }
+
+  function configureClaudeThreadExportButton(button, header) {
+    if (!button) {
+      return;
+    }
+    button.className = getClaudeThreadExportButtonClass();
+    button.setAttribute('data-cds', 'Button');
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute(CLAUDE_THREAD_EXPORT_ATTR, 'true');
+    if (!button.querySelector('[data-cds="Icon"]') || !button.querySelector('.cds-btn-squish')) {
+      renderClaudeThreadExportButton(button);
+    }
+    setExportIconStrokeWidth(button, '1.5');
+    resetClaudeThreadExportButtonColor(button);
+    attachClaudeThreadTooltip(button);
+  }
+
+  function attachClaudeThreadTooltip(button) {
+    if (!button || button.hasAttribute(CLAUDE_TOOLTIP_BOUND_ATTR)) {
+      return;
+    }
+    button.setAttribute(CLAUDE_TOOLTIP_BOUND_ATTR, 'true');
+    attachClaudeTooltip(button, button, 'Export');
+  }
+
+  function resetClaudeThreadExportButtonColor(button) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    if (button.style) {
+      button.style.removeProperty('color');
+      button.style.removeProperty('stroke');
+    }
+    button.querySelectorAll('svg, svg path, [data-cds="Icon"]').forEach((node) => {
+      if (node.style) {
+        node.style.removeProperty('color');
+        node.style.removeProperty('stroke');
+      }
+      if (node.tagName && node.tagName.toLowerCase() === 'path') {
+        node.setAttribute('stroke', 'currentColor');
+      }
+    });
+  }
+
   function attachClaudeTurnButtons(root) {
     const scope = root || document;
     const containers = collectClaudeActionContainers(scope);
     containers.forEach((container) => {
-      if (container.querySelector(`[${CLAUDE_TURN_EXPORT_ATTR}]`)) {
+      const existingButton = container.querySelector(`[${CLAUDE_TURN_EXPORT_ATTR}]`);
+      if (existingButton) {
+        configureClaudeTurnExportButton(existingButton);
         return;
       }
       const messageNode = findClaudeMessageForActions(container);
@@ -3058,10 +4490,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         return;
       }
       const button = buildExportButton('turn', {
-        extraClasses: copyButton.className
+        overrideClassName: getClaudeTurnExportButtonClass()
       });
       button.setAttribute('aria-label', 'Export');
       button.setAttribute(CLAUDE_TURN_EXPORT_ATTR, 'true');
+      configureClaudeTurnExportButton(button);
       const wrapper = document.createElement('div');
       wrapper.className = 'w-fit';
       wrapper.setAttribute('data-state', 'closed');
@@ -3076,83 +4509,176 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  function getClaudeTurnExportButtonClass() {
+    return 'omni-exporter-btn cds-reset group/btn relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap select-none ' +
+      'cursor-[var(--cds-cursor-interactive)] aria-disabled:cursor-default data-[disabled]:cursor-default border-0 outline-none rounded h-control ' +
+      'font-sans text-body font-medium [&:disabled:not([aria-busy])]:opacity-50 disabled:pointer-events-none transition-shadow duration-fast ' +
+      'focus-visible:shadow-focus text-primary aria-pressed:text-accent aspect-square w-control px-0 !text-muted hover:!text-primary';
+  }
+
+  function configureClaudeTurnExportButton(button) {
+    if (!button) {
+      return;
+    }
+    button.className = getClaudeTurnExportButtonClass();
+    button.setAttribute('data-cds', 'Button');
+    button.setAttribute('data-size', 'xs');
+    button.setAttribute('tabindex', '-1');
+    button.setAttribute(CLAUDE_TURN_EXPORT_ATTR, 'true');
+    if (!button.querySelector('[data-omni-claude-turn-icon]')) {
+      renderClaudeTurnExportButton(button);
+    }
+  }
+
+  function renderClaudeTurnExportButton(button) {
+    button.innerHTML = `
+<span aria-hidden="true" class="absolute -z-[1] rounded-[inherit] transition-colors duration-fast group-focus-visible/btn:shadow-[inset_0_0_0_1px_var(--cds-page-bg)] bg-transparent group-hover/btn:bg-fill-ghost-hover group-aria-expanded/btn:bg-fill-ghost-hover inset-0 group-aria-pressed/btn:bg-accent group-hover/btn:group-aria-pressed/btn:bg-accent cds-btn-squish "></span>
+<span class="inline-flex items-center gap-1 ">
+  <span data-omni-claude-turn-icon="true" data-cds="Icon" aria-hidden="true" style="line-height: 1; width: 1em; height: 1em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; user-select: none; font-size: 16px;">
+    ${buildExportIcon('16').replace('stroke-width="2"', 'stroke-width="1.5"')}
+  </span>
+</span>`;
+  }
+
+  // ─────────────────────────────────────────────
+  // Claude tooltip system
+  // ─────────────────────────────────────────────
+
   function attachClaudeTooltip(wrapper, button, label) {
     let tooltipEl = null;
     let tooltipId = null;
-    let showTimer = null;
+    let cleanupPositionListeners = null;
+    let isTooltipTargetActive = false;
+    let isTooltipHovered = false;
+    let hideTimer = null;
 
-    const clearShowTimer = () => {
-      if (!showTimer) {
+    installClaudeTooltipBridge();
+
+    const clearHideTimer = () => {
+      if (!hideTimer) {
         return;
       }
-      window.clearTimeout(showTimer);
-      showTimer = null;
+      window.clearTimeout(hideTimer);
+      hideTimer = null;
     };
 
-    const show = () => {
-      showTimer = null;
-      if (tooltipEl) {
-        return;
-      }
-      tooltipId = `radix_${Math.random().toString(36).slice(2, 9)}`;
-      wrapper.setAttribute('data-state', 'delayed-open');
-      wrapper.setAttribute('aria-describedby', tooltipId);
-      const popperWrapper = document.createElement('div');
-      popperWrapper.setAttribute('data-radix-popper-content-wrapper', '');
-      popperWrapper.style.position = 'fixed';
-      popperWrapper.style.left = '0px';
-      popperWrapper.style.top = '0px';
-      popperWrapper.style.transform = 'translate(0px, -200%)';
-      popperWrapper.style.minWidth = 'max-content';
-      popperWrapper.style.willChange = 'transform';
-      popperWrapper.style.zIndex = '50';
-      const tooltip = document.createElement('div');
-      tooltip.setAttribute('data-side', 'top');
-      tooltip.setAttribute('data-align', 'center');
-      tooltip.setAttribute('data-state', 'delayed-open');
-      tooltip.className = 'px-2 py-1 text-xs font-normal font-ui leading-tight rounded-md shadow-md text-always-white bg-always-black/80 backdrop-blur break-words z-tooltip max-w-[13rem] text-pretty [*:disabled_&]:hidden';
-      tooltip.textContent = label;
-      const sr = document.createElement('span');
-      sr.id = tooltipId;
-      sr.setAttribute('role', 'tooltip');
-      sr.style.position = 'absolute';
-      sr.style.border = '0px';
-      sr.style.width = '1px';
-      sr.style.height = '1px';
-      sr.style.padding = '0px';
-      sr.style.margin = '-1px';
-      sr.style.overflow = 'hidden';
-      sr.style.clip = 'rect(0px, 0px, 0px, 0px)';
-      sr.style.whiteSpace = 'nowrap';
-      sr.style.overflowWrap = 'normal';
-      sr.textContent = label;
-      tooltip.appendChild(sr);
-      popperWrapper.appendChild(tooltip);
-      document.body.appendChild(popperWrapper);
-      tooltipEl = popperWrapper;
-
-      const rect = button.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.bottom;
-      popperWrapper.style.transform = `translate(${Math.round(x)}px, ${Math.round(y + 4)}px) translate(-50%, 0)`;
+    const relatedTargetIsTooltip = (event) => {
+      const related = event && event.relatedTarget;
+      return Boolean(tooltipEl && related && tooltipEl.contains && tooltipEl.contains(related));
     };
 
-    const scheduleShow = () => {
-      if (tooltipEl || showTimer) {
-        return;
-      }
-      showTimer = window.setTimeout(show, CLAUDE_TOOLTIP_DELAY_MS);
+    const relatedTargetIsTrigger = (event) => {
+      const related = event && event.relatedTarget;
+      return Boolean(related && (
+        related === button ||
+        related === wrapper ||
+        (button.contains && button.contains(related)) ||
+        (wrapper.contains && wrapper.contains(related))
+      ));
     };
 
-    const hide = () => {
-      clearShowTimer();
+    const closeTooltip = (markWarm) => {
+      clearHideTimer();
       wrapper.setAttribute('data-state', 'closed');
       wrapper.removeAttribute('aria-describedby');
+      if (cleanupPositionListeners) {
+        cleanupPositionListeners();
+        cleanupPositionListeners = null;
+      }
       if (tooltipEl) {
         tooltipEl.remove();
         tooltipEl = null;
         tooltipId = null;
       }
+      if (activeClaudeOmniTooltipCloser === closeTooltip) {
+        activeClaudeOmniTooltipCloser = null;
+      }
+      if (markWarm) {
+        markClaudeTooltipWarm();
+      }
+    };
+
+    const scheduleHide = (event) => {
+      cancelClaudeTooltipShow();
+      clearHideTimer();
+      const hadVisibleTooltip = Boolean(tooltipEl);
+      if (!hadVisibleTooltip) {
+        closeTooltip(false);
+        return;
+      }
+      const nextClaudeButton = event && event.relatedTarget
+        ? findClaudeNativeTooltipButton(event.relatedTarget)
+        : null;
+      if (nextClaudeButton) {
+        closeTooltip(true);
+        return;
+      }
+      hideTimer = window.setTimeout(() => {
+        if (isTooltipTargetActive || isTooltipHovered) {
+          return;
+        }
+        closeTooltip(true);
+      }, CLAUDE_TOOLTIP_HIDE_DELAY_MS);
+    };
+
+    const show = () => {
+      if (!isTooltipTargetActive && document.activeElement !== button) {
+        return false;
+      }
+      if (tooltipEl) {
+        return false;
+      }
+      dismissVisibleClaudeNativeTooltips();
+      tooltipId = `omni_claude_export_tooltip_${Math.random().toString(36).slice(2, 9)}`;
+      wrapper.setAttribute('data-state', 'delayed-open');
+      wrapper.setAttribute('aria-describedby', tooltipId);
+
+      const tooltipParts = createClaudeTooltipPortal(label, tooltipId);
+      const portal = tooltipParts.portal;
+      const popperWrapper = tooltipParts.popperWrapper;
+      const tooltip = tooltipParts.tooltip;
+      document.body.appendChild(portal);
+      tooltipEl = portal;
+      activeClaudeOmniTooltipCloser = closeTooltip;
+
+      const reposition = () => positionClaudeTooltip(button, popperWrapper, tooltip);
+      reposition();
+      window.addEventListener('scroll', reposition, true);
+      window.addEventListener('resize', reposition, true);
+      cleanupPositionListeners = () => {
+        window.removeEventListener('scroll', reposition, true);
+        window.removeEventListener('resize', reposition, true);
+      };
+      portal.addEventListener('mouseenter', () => {
+        isTooltipHovered = true;
+        clearHideTimer();
+      });
+      portal.addEventListener('mouseleave', (event) => {
+        isTooltipHovered = false;
+        if (relatedTargetIsTrigger(event)) {
+          return;
+        }
+        scheduleHide(event);
+      });
+      return true;
+    };
+
+    const scheduleShow = () => {
+      isTooltipTargetActive = true;
+      clearHideTimer();
+      dismissVisibleClaudeNativeTooltips();
+      if (tooltipEl) {
+        return;
+      }
+      scheduleClaudeTooltipShow(show);
+    };
+
+    const hide = (event) => {
+      isTooltipTargetActive = false;
+      if (relatedTargetIsTooltip(event)) {
+        return;
+      }
+      scheduleHide(event);
     };
 
     wrapper.addEventListener('mouseenter', scheduleShow);
@@ -3161,6 +4687,325 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     button.addEventListener('blur', hide);
   }
 
+  function getClaudeTooltipNow() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function isClaudeTooltipWarm() {
+    return getClaudeTooltipNow() < claudeTooltipWarmUntil;
+  }
+
+  function markClaudeTooltipWarm() {
+    claudeTooltipWarmUntil = getClaudeTooltipNow() + CLAUDE_TOOLTIP_SKIP_DELAY_MS;
+  }
+
+  function scheduleClaudeTooltipShow(callback) {
+    cancelClaudeTooltipShow();
+    const delay = isClaudeTooltipWarm() || hasVisibleClaudeNativeTooltips() ? 0 : CLAUDE_TOOLTIP_DELAY_MS;
+    claudeTooltipShowTimer = window.setTimeout(() => {
+      claudeTooltipShowTimer = null;
+      if (callback()) {
+        markClaudeTooltipWarm();
+      }
+    }, delay);
+  }
+
+  function cancelClaudeTooltipShow() {
+    if (!claudeTooltipShowTimer) {
+      return;
+    }
+    window.clearTimeout(claudeTooltipShowTimer);
+    claudeTooltipShowTimer = null;
+  }
+
+  function installClaudeTooltipBridge() {
+    if (claudeTooltipBridgeInstalled || platform !== 'claude') {
+      return;
+    }
+    claudeTooltipBridgeInstalled = true;
+
+    document.addEventListener('mouseover', (event) => {
+      if (!isClaudeTooltipWarm()) {
+        return;
+      }
+      const button = findClaudeNativeTooltipButton(event.target);
+      if (!button) {
+        return;
+      }
+      showClaudeBridgeTooltip(button);
+    }, true);
+
+    document.addEventListener('mouseout', (event) => {
+      if (!activeClaudeBridgeTooltip) {
+        return;
+      }
+      const button = activeClaudeBridgeTooltip.button;
+      const related = event.relatedTarget;
+      if (button && related && button.contains && button.contains(related)) {
+        return;
+      }
+      if (button && event.target && button.contains && button.contains(event.target)) {
+        hideClaudeBridgeTooltip();
+      }
+    }, true);
+
+    document.addEventListener('focusin', (event) => {
+      if (!isClaudeTooltipWarm()) {
+        return;
+      }
+      const button = findClaudeNativeTooltipButton(event.target);
+      if (button) {
+        showClaudeBridgeTooltip(button);
+      }
+    }, true);
+
+    document.addEventListener('focusout', (event) => {
+      if (activeClaudeBridgeTooltip && activeClaudeBridgeTooltip.button === event.target) {
+        hideClaudeBridgeTooltip();
+      }
+    }, true);
+  }
+
+  function findClaudeNativeTooltipButton(target) {
+    if (!target || !target.closest) {
+      return null;
+    }
+    const button = target.closest('button[data-cds="Button"], button[data-testid^="action-bar-"], [data-message-action-bar] button');
+    if (!button || button.hasAttribute(CLAUDE_TURN_EXPORT_ATTR) || button.classList.contains(EXPORT_BUTTON_CLASS)) {
+      return null;
+    }
+    if (!button.closest('[data-message-action-bar]')) {
+      return null;
+    }
+    return button;
+  }
+
+  function showClaudeBridgeTooltip(button) {
+    if (!button || hasVisibleClaudeNativeTooltips()) {
+      hideClaudeBridgeTooltip();
+      return;
+    }
+    if (activeClaudeOmniTooltipCloser) {
+      activeClaudeOmniTooltipCloser(true);
+    }
+    const label = getClaudeNativeTooltipLabel(button);
+    if (!label) {
+      return;
+    }
+    if (activeClaudeBridgeTooltip && activeClaudeBridgeTooltip.button === button) {
+      activeClaudeBridgeTooltip.reposition();
+      return;
+    }
+    hideClaudeBridgeTooltip();
+
+    const tooltipId = `omni_claude_bridge_tooltip_${Math.random().toString(36).slice(2, 9)}`;
+    const tooltipParts = createClaudeTooltipPortal(label, tooltipId);
+    const portal = tooltipParts.portal;
+    const popperWrapper = tooltipParts.popperWrapper;
+    const tooltip = tooltipParts.tooltip;
+    portal.setAttribute('data-omni-claude-bridge-tooltip', '');
+    document.body.appendChild(portal);
+
+    const reposition = () => positionClaudeTooltip(button, popperWrapper, tooltip);
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition, true);
+
+    let nativeCheckTimer = null;
+    let nativeHideTimer = null;
+    let nativeTooltipDetected = false;
+    let remainingChecks = 18;
+    nativeCheckTimer = window.setInterval(() => {
+      remainingChecks -= 1;
+      if (!activeClaudeBridgeTooltip || activeClaudeBridgeTooltip.portal !== portal) {
+        window.clearInterval(nativeCheckTimer);
+        return;
+      }
+      if (hasVisibleClaudeNativeTooltips()) {
+        if (!nativeTooltipDetected) {
+          nativeTooltipDetected = true;
+          nativeHideTimer = window.setTimeout(() => {
+            hideClaudeBridgeTooltip();
+          }, 140);
+        }
+        return;
+      }
+      if (remainingChecks <= 0) {
+        hideClaudeBridgeTooltip();
+      }
+    }, 50);
+
+    activeClaudeBridgeTooltip = {
+      button,
+      portal,
+      reposition,
+      cleanup: () => {
+        window.removeEventListener('scroll', reposition, true);
+        window.removeEventListener('resize', reposition, true);
+        if (nativeCheckTimer) {
+          window.clearInterval(nativeCheckTimer);
+          nativeCheckTimer = null;
+        }
+        if (nativeHideTimer) {
+          window.clearTimeout(nativeHideTimer);
+          nativeHideTimer = null;
+        }
+      }
+    };
+  }
+
+  function hideClaudeBridgeTooltip() {
+    if (!activeClaudeBridgeTooltip) {
+      return;
+    }
+    activeClaudeBridgeTooltip.cleanup();
+    activeClaudeBridgeTooltip.portal.remove();
+    activeClaudeBridgeTooltip = null;
+    markClaudeTooltipWarm();
+  }
+
+  function getClaudeNativeTooltipLabel(button) {
+    const candidates = [
+      button.getAttribute('aria-label'),
+      button.getAttribute('title'),
+      button.getAttribute('data-tooltip'),
+      normalizeText(button.textContent || '')
+    ];
+    return candidates
+      .map((candidate) => normalizeText(candidate || ''))
+      .find((candidate) => candidate && candidate.length <= 80) || '';
+  }
+
+  function createClaudeTooltipPortal(label, tooltipId) {
+    const mode = resolveClaudeTooltipMode();
+    const portal = document.createElement('div');
+    portal.setAttribute('data-base-ui-portal', '');
+    portal.setAttribute('data-omni-claude-tooltip', '');
+
+    const root = document.createElement('div');
+    root.className = 'cds-root pointer-events-auto';
+    root.setAttribute('data-cds-portal', '');
+    root.setAttribute('data-density', 'comfortable');
+    root.setAttribute('data-mode', mode);
+    root.setAttribute('data-platform', 'web');
+    root.setAttribute('data-font', 'anthropic');
+
+    const popperWrapper = document.createElement('div');
+    popperWrapper.setAttribute('data-open', '');
+    popperWrapper.setAttribute('data-side', 'top');
+    popperWrapper.setAttribute('data-align', 'center');
+    popperWrapper.setAttribute('data-instant', 'delay');
+    popperWrapper.setAttribute('role', 'presentation');
+    popperWrapper.setAttribute('data-cds', 'Tooltip');
+    popperWrapper.className = 'z-tooltip';
+    popperWrapper.style.position = 'fixed';
+    popperWrapper.style.left = '0px';
+    popperWrapper.style.top = '0px';
+    popperWrapper.style.willChange = 'transform';
+    popperWrapper.style.zIndex = '50';
+
+    const tooltip = document.createElement('div');
+    tooltip.id = tooltipId;
+    tooltip.setAttribute('data-open', '');
+    tooltip.setAttribute('data-side', 'top');
+    tooltip.setAttribute('data-align', 'center');
+    tooltip.setAttribute('data-instant', 'delay');
+    tooltip.setAttribute('tabindex', '-1');
+    tooltip.setAttribute('data-base-ui-focusable', '');
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.className = 'px-2 rounded-[6px] bg-[var(--cds-tooltip-bg)] text-[var(--cds-tooltip-fg)] shadow-sm dark:shadow-panel-sm text-[13px]/[18px] origin-[var(--transform-origin)] transition-[opacity,scale] duration-snap ease-snap motion-reduce:transition-none data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[instant]:duration-0 inline-flex items-center whitespace-nowrap gap-2 h-6';
+
+    const contentRoot = document.createElement('div');
+    contentRoot.className = 'cds-root contents';
+    contentRoot.setAttribute('data-mode', mode);
+    contentRoot.setAttribute('data-density', 'comfortable');
+    contentRoot.setAttribute('data-platform', 'web');
+    contentRoot.setAttribute('data-font', 'anthropic');
+
+    const text = document.createElement('span');
+    text.textContent = label;
+    contentRoot.appendChild(text);
+    tooltip.appendChild(contentRoot);
+    popperWrapper.appendChild(tooltip);
+    root.appendChild(popperWrapper);
+    portal.appendChild(root);
+
+    return { portal, popperWrapper, tooltip };
+  }
+
+  function hasVisibleClaudeNativeTooltips() {
+    return getVisibleClaudeNativeTooltipPortals().length > 0;
+  }
+
+  function dismissVisibleClaudeNativeTooltips() {
+    const portals = getVisibleClaudeNativeTooltipPortals();
+    portals.forEach((portal) => {
+      portal.remove();
+    });
+    if (portals.length) {
+      markClaudeTooltipWarm();
+    }
+  }
+
+  function getVisibleClaudeNativeTooltipPortals() {
+    if (platform !== 'claude') {
+      return [];
+    }
+    const seen = new Set();
+    const portals = [];
+    document.querySelectorAll('[data-base-ui-portal] [role="tooltip"]').forEach((tooltip) => {
+      const portal = tooltip.closest('[data-base-ui-portal]');
+      if (!portal || portal.hasAttribute('data-omni-claude-tooltip') || seen.has(portal)) {
+        return;
+      }
+      const rect = tooltip.getBoundingClientRect ? tooltip.getBoundingClientRect() : null;
+      if (rect && rect.width > 0 && rect.height > 0) {
+        seen.add(portal);
+        portals.push(portal);
+      }
+    });
+    return portals;
+  }
+
+  function resolveClaudeTooltipMode() {
+    const root = document.querySelector('[data-mode]');
+    const mode = root ? ensureString(root.getAttribute('data-mode')).trim() : '';
+    return mode || 'dark';
+  }
+
+  function positionClaudeTooltip(button, popperWrapper, tooltip) {
+    if (!button || !popperWrapper || !tooltip || !button.getBoundingClientRect) {
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const width = tooltipRect.width || 96;
+    const height = tooltipRect.height || 24;
+    const padding = 8;
+    const left = Math.max(padding, Math.min(window.innerWidth - width - padding, rect.left + (rect.width / 2) - (width / 2)));
+    const isThreadTooltip = button.hasAttribute && button.hasAttribute(CLAUDE_THREAD_EXPORT_ATTR);
+    const top = isThreadTooltip
+      ? Math.min(window.innerHeight - height - padding, rect.bottom + 4)
+      : Math.max(padding, rect.top - height - 5.4);
+    const originX = Math.max(0, Math.min(width, rect.left + (rect.width / 2) - left));
+    const side = isThreadTooltip ? 'bottom' : 'top';
+
+    popperWrapper.setAttribute('data-side', side);
+    tooltip.setAttribute('data-side', side);
+    popperWrapper.style.setProperty('--available-width', `${Math.max(0, window.innerWidth - padding * 2)}px`);
+    popperWrapper.style.setProperty('--available-height', `${Math.max(0, (isThreadTooltip ? window.innerHeight - rect.bottom : rect.top) - padding)}px`);
+    popperWrapper.style.setProperty('--anchor-width', `${Math.round(rect.width)}px`);
+    popperWrapper.style.setProperty('--anchor-height', `${Math.round(rect.height)}px`);
+    popperWrapper.style.setProperty('--transform-origin', isThreadTooltip ? `${originX}px -4px` : `${originX}px calc(100% + 4px)`);
+    popperWrapper.style.transform = `translate(${left}px, ${Math.max(padding, top)}px)`;
+  }
+
+
+  // ─────────────────────────────────────────────
+  // DeepSeek buttons and tooltip system
+  // ─────────────────────────────────────────────
 
   function attachDeepSeekButtons(root) {
     attachDeepSeekTurnButtons(root);
@@ -3334,6 +5179,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     candidates.push(...root.querySelectorAll(DEEPSEEK_THREAD_BUTTON_SELECTOR));
     for (const targetButton of candidates) {
+      if (targetButton.closest(DEEPSEEK_ACTIONS_SELECTOR)) {
+        continue;
+      }
       const parent = targetButton.parentElement;
       if (!parent || parent.querySelector(`[${DEEPSEEK_THREAD_EXPORT_ATTR}]`)) {
         continue;
@@ -3346,18 +5194,30 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       button.setAttribute(DEEPSEEK_THREAD_EXPORT_ATTR, 'true');
       button.setAttribute('aria-label', 'Export');
       attachDeepSeekTurnTooltip(button);
+      button.style.setProperty('--dsl-button-height', '34px');
       button.style.marginRight = '0px';
       targetButton.insertAdjacentElement('beforebegin', button);
       break;
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Shared export buttons and menu
+  // ─────────────────────────────────────────────
+
   function attachHeaderButton(root) {
     const scope = root || document;
     const headerActions = scope.matches && scope.matches(HEADER_ACTIONS_SELECTOR)
       ? scope
       : scope.querySelector(HEADER_ACTIONS_SELECTOR);
-    if (!headerActions || headerActions.querySelector(`[${HEADER_EXPORT_ATTR}]`)) {
+    if (!headerActions) {
+      return;
+    }
+    const existingButton = headerActions.querySelector(`[${HEADER_EXPORT_ATTR}]`);
+    if (existingButton) {
+      if (platform === 'chatgpt') {
+        setExportIconStrokeWidth(existingButton, '1.6');
+      }
       return;
     }
     const shareButton = headerActions.querySelector('[data-testid="share-chat-button"]');
@@ -3369,10 +5229,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         'text-token-text-primary no-draggable hover:bg-token-surface-hover keyboard-focused:bg-token-surface-hover ' +
         'touch:h-10 touch:w-10 flex h-9 w-9 items-center justify-center rounded-lg ' +
         'focus:outline-none disabled:opacity-50';
-    }
-    if (platform === 'chatgpt') {
-      button.setAttribute('data-state', 'closed');
-      button.setAttribute('data-radix-tooltip-trigger', '');
+      setExportIconStrokeWidth(button, '1.6');
     }
 
 
@@ -3381,6 +5238,15 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     } else {
       headerActions.insertAdjacentElement('afterbegin', button);
     }
+  }
+
+  function setExportIconStrokeWidth(button, width) {
+    if (!button || !button.querySelectorAll) {
+      return;
+    }
+    button.querySelectorAll('svg path').forEach((path) => {
+      path.setAttribute('stroke-width', width);
+    });
   }
 
   function buildExportButton(scope, options) {
@@ -3404,8 +5270,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       button.setAttribute('aria-label', 'Exporter ce chat');
     }
     if (platform === 'chatgpt' && tagName === 'button') {
-      button.setAttribute('data-state', 'closed');
-      button.setAttribute('data-radix-tooltip-trigger', '');
+      button.removeAttribute('title');
     }
   }
 
@@ -3414,7 +5279,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const overrideClassName = options && options.overrideClassName ? options.overrideClassName : '';
     button.className = overrideClassName || `${EXPORT_BUTTON_CLASS}${extraClasses}`;
     if (platform === 'chatgpt' && scope === 'turn' && !overrideClassName) {
-      button.className = `${EXPORT_BUTTON_CLASS} text-token-text-secondary hover:bg-token-bg-secondary rounded-lg`;
+      button.className = `${EXPORT_BUTTON_CLASS} text-token-text-secondary hover:bg-token-surface-hover rounded-lg`;
     }
   }
 
@@ -3433,14 +5298,27 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       renderDeepSeekStyleExportButton(button);
       return;
     }
+    if (platform === 'claude' && scope === 'thread') {
+      renderClaudeThreadExportButton(button);
+      return;
+    }
     renderDefaultExportButtonIcon(button, scope);
+  }
+
+  function renderClaudeThreadExportButton(button) {
+    button.innerHTML = `
+<span aria-hidden="true" class="absolute -z-[1] rounded-[inherit] transition-colors duration-fast group-focus-visible/btn:shadow-[inset_0_0_0_1px_var(--cds-page-bg)] bg-transparent group-hover/btn:bg-fill-ghost-hover group-aria-expanded/btn:bg-fill-ghost-hover inset-0 group-aria-pressed/btn:bg-accent group-hover/btn:group-aria-pressed/btn:bg-accent cds-btn-squish "></span>
+<span class="inline-flex items-center gap-1 ">
+  <span data-cds="Icon" aria-hidden="true" style="line-height: 1; width: 1em; height: 1em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; user-select: none; font-size: 20px;">
+    ${buildExportIcon('20').replace('stroke-width="2"', 'stroke-width="1.5"')}
+  </span>
+</span>`;
   }
 
   function renderDeepSeekStyleExportButton(button) {
       button.innerHTML = `
-<div class="ds-icon-button__hover-bg"></div>
-<div class="ds-icon">${platform === 'gemini' ? '' : buildExportIcon()}</div>
-<div class="ds-focus-ring"></div>`;
+<div class="ds-button__background"></div>
+<div class="ds-button__icon ds-button__icon--last-child"><div class="ds-icon" style="font-size: inherit;">${platform === 'gemini' ? '' : buildExportIcon('16')}</div></div>`;
     if (platform === 'gemini') {
       const iconDiv = button.querySelector('.ds-icon');
       if (iconDiv) {
@@ -3652,6 +5530,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     menu.style.top = `${Math.max(top, minTop)}px`;
   }
 
+  // ─────────────────────────────────────────────
+  // Export workflow
+  // ─────────────────────────────────────────────
+
   async function handleExportFormat(format, button) {
     const isPdfExport = format === 'pdf';
     if (isPdfExport) {
@@ -3751,6 +5633,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     return { content: buildExportMarkdown(messages), mimeType: 'text/markdown' };
   }
+
+  // ─────────────────────────────────────────────
+  // Message collection and platform anchors
+  // ─────────────────────────────────────────────
 
   function findAnchorTurn(button) {
     if (platform === 'chatgpt') {
@@ -4211,24 +6097,28 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function findClaudeAnchor(button) {
-    const direct = button.closest('[data-testid="assistant-message"], [data-testid="user-message"], .font-claude-response, article, section');
+    const actions = getClaudeActionContainer(button);
+    if (actions) {
+      const fromActions = findClaudeMessageForActions(actions);
+      if (fromActions) {
+        return fromActions;
+      }
+    }
+    const direct = button.closest('[data-testid="assistant-message"], [data-testid="user-message"], .font-claude-response');
     if (direct) {
       return direct;
     }
-    const actions = getClaudeActionContainer(button);
-    if (!actions) {
-      return null;
-    }
-    return findClaudeMessageForActions(actions);
+    const article = button.closest('article, section');
+    return article || null;
   }
 
   function getClaudeActionContainer(element) {
     if (!element || typeof element.closest !== 'function') {
       return null;
     }
-    const labeled = element.closest(CLAUDE_ACTIONS_SELECTOR);
-    if (labeled) {
-      return labeled;
+    const actionBar = element.closest('[data-message-action-bar]');
+    if (actionBar) {
+      return actionBar;
     }
     const copyButton = (element.matches && element.matches(CLAUDE_COPY_SELECTOR))
       ? element
@@ -4236,7 +6126,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!copyButton) {
       return null;
     }
-    return copyButton.closest('[role="group"]') || copyButton.parentElement || null;
+    return copyButton.closest('[data-message-action-bar]') ||
+      copyButton.closest('[role="toolbar"], [role="group"]') ||
+      copyButton.parentElement ||
+      null;
   }
 
   function collectClaudeActionContainers(scope) {
@@ -4299,6 +6192,17 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function findClaudeMessageForActions(actions) {
+    const article = actions.closest('article');
+    if (article) {
+      const assistantInArticle = article.querySelector('.font-claude-response, [data-testid="assistant-message"]');
+      if (assistantInArticle) {
+        return assistantInArticle;
+      }
+      const userInArticle = article.querySelector('[data-testid="user-message"]');
+      if (userInArticle) {
+        return userInArticle;
+      }
+    }
     let sibling = actions.previousElementSibling;
     while (sibling) {
       if (sibling.matches('[data-testid="assistant-message"], [data-testid="user-message"], .font-claude-response, article, section')) {
@@ -4906,6 +6810,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return null;
   }
 
+  // ─────────────────────────────────────────────
+  // DOM cleanup and content extraction
+  // ─────────────────────────────────────────────
+
   function cleanHtml(node) {
     if (!node) return '';
     const clone = node.cloneNode(true);
@@ -5463,15 +7371,19 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  // ─────────────────────────────────────────────
+  // Markdown and text export rendering
+  // ─────────────────────────────────────────────
+
   function buildExportMarkdown(messages) {
     const title = `${getPlatformLabel()} Export`;
     const conversationTitle = getExportConversationTitle();
     const lines = [];
     lines.push(`# ${title}`);
     if (conversationTitle) {
-      lines.push(`Conversation: ${conversationTitle}`);
+      lines.push(`Conversation: ${conversationTitle}  `);
     }
-    lines.push(`URL: ${location.href}`);
+    lines.push(`URL: ${location.href}  `);
     lines.push(`Exported: ${new Date().toISOString()}`);
     lines.push('');
     messages.forEach((message) => {
@@ -5587,6 +7499,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     };
     if (Object.prototype.hasOwnProperty.call(simpleRenderers, tag)) {
       return simpleRenderers[tag]();
+    }
+    if (tag === 'input' && isMarkdownCheckboxInput(node)) {
+      return renderMarkdownCheckboxInput(node);
     }
     if (tag === 'code') {
       return node.closest('pre') ? '' : wrapMarkdownInlineCode(node.textContent || '');
@@ -5730,7 +7645,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!rendered) {
       return '';
     }
-    return depth > 0 ? `\n${rendered}\n` : `\n\n${rendered}\n\n`;
+    return depth > 0 ? rendered : `\n\n${rendered}\n\n`;
   }
 
   function renderMarkdownListItem(listItemNode, ctx, marker) {
@@ -5788,6 +7703,21 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const raw = ensureString(listNode && listNode.getAttribute && listNode.getAttribute('start')).trim();
     const value = Number.parseInt(raw, 10);
     return Number.isFinite(value) ? value : 1;
+  }
+
+  function isMarkdownCheckboxInput(node) {
+    return node &&
+      node.getAttribute &&
+      ensureString(node.getAttribute('type')).toLowerCase() === 'checkbox';
+  }
+
+  function renderMarkdownCheckboxInput(node) {
+    const ariaChecked = ensureString(node.getAttribute('aria-checked')).toLowerCase();
+    const isChecked = node.checked ||
+      node.hasAttribute('checked') ||
+      ariaChecked === 'true' ||
+      ariaChecked === 'mixed';
+    return isChecked ? '[x] ' : '[ ] ';
   }
 
   function renderMarkdownTable(tableNode, ctx) {
@@ -5943,7 +7873,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return ensureString(value)
       .replace(/\r\n/g, '\n')
       .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n[ \t]+/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -6044,6 +7973,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 </body>
 </html>`;
   }
+
+  // ─────────────────────────────────────────────
+  // PDF HTML parsing and pdfmake conversion
+  // ─────────────────────────────────────────────
 
   function convertHtmlToPdfMake(htmlOrText) {
     if (!htmlOrText || typeof htmlOrText !== 'string') {
@@ -6265,6 +8198,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (tagName === 'u') {
       return childContent.map(c => ({ ...c, decoration: 'underline' }));
     }
+    if (tagName === 'del' || tagName === 's' || tagName === 'strike') {
+      return childContent.map(c => ({ ...c, decoration: 'lineThrough' }));
+    }
     if (tagName === 'a') {
       const href = node.getAttribute('href') || '';
       return childContent.map(c => ({ ...c, link: href, color: '#2563eb', decoration: 'underline' }));
@@ -6328,9 +8264,19 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function buildPdfHorizontalRule() {
     return [{
-      canvas: [
-        { type: 'line', x1: 0, y1: 0, x2: 505, y2: 0, lineWidth: 0.5, lineColor: '#cbd5e1' }
-      ],
+      table: {
+        widths: ['*'],
+        body: [[{ text: ' ', border: [false, false, false, true], fontSize: 1, lineHeight: 1 }]]
+      },
+      layout: {
+        hLineWidth: (i) => (i === 1 ? 0.5 : 0),
+        hLineColor: () => '#cbd5e1',
+        vLineWidth: () => 0,
+        paddingLeft: () => 0,
+        paddingRight: () => 0,
+        paddingTop: () => 0,
+        paddingBottom: () => 0
+      },
       margin: [0, 6, 0, 8]
     }];
   }
@@ -6527,41 +8473,103 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
 
     const start = getOrderedListStart(listNode);
-    const body = items.map((li, index) => {
+    const listItems = items.map((li, index) => {
       const marker = isOrdered ? `${start + index}.` : '•';
       const stack = buildListItemStackFromNode(li);
-      return [
-        {
-          text: marker,
-          bold: isOrdered,
-          noWrap: true,
-          color: '#334155',
-          alignment: 'right',
-          margin: [0, 0, 3, 0],
-          border: [false, false, false, false]
-        },
-        {
-          stack: stack.length ? stack : [{ text: '' }],
-          border: [false, false, false, false]
-        }
-      ];
+      return buildPdfSelectableListItem(marker, stack, isOrdered);
     });
 
     return {
-      table: {
-        widths: [14, '*'],
-        body: body
-      },
-      layout: {
-        hLineWidth: () => 0,
-        vLineWidth: () => 0,
-        paddingLeft: () => 0,
-        paddingRight: (i) => (i === 0 ? 2 : 0),
-        paddingTop: () => 0,
-        paddingBottom: () => 0
-      },
+      stack: listItems,
       margin: [0, 2, 0, 2]
     };
+  }
+
+  function buildPdfSelectableListItem(marker, stack, isOrdered) {
+    const content = stack && stack.length ? stack : [{ text: '' }];
+    const normalizedContent = content.map(normalizePdfSelectableListItemPart).filter(Boolean);
+    const hangingIndent = getPdfListHangingIndent(marker);
+    const first = normalizedContent[0] || { text: '' };
+    const rest = normalizedContent.slice(1).map((entry) => addPdfListContinuationIndent(entry, hangingIndent));
+
+    if (isInlinePdfTextPart(first)) {
+      const firstLine = Object.assign({}, first, {
+        text: prefixPdfSelectableListText(marker, first.text, isOrdered),
+        fontSize: first.fontSize || 11,
+        lineHeight: first.lineHeight || 1.25,
+        noWrap: false,
+        margin: [hangingIndent, 0, 0, 0],
+        leadingIndent: -hangingIndent
+      });
+      if (!rest.length) {
+        firstLine.margin = [hangingIndent, 0, 0, 1];
+        return firstLine;
+      }
+      return {
+        stack: [firstLine, ...rest],
+        margin: [0, 0, 0, 1]
+      };
+    }
+
+    return {
+      stack: [
+        {
+          text: prefixPdfSelectableListText(marker, '', isOrdered),
+          fontSize: 11,
+          lineHeight: 1.25,
+          margin: [hangingIndent, 0, 0, 0],
+          leadingIndent: -hangingIndent
+        },
+        addPdfListContinuationIndent(first, hangingIndent),
+        ...rest
+      ],
+      margin: [0, 0, 0, 1]
+    };
+  }
+
+  function normalizePdfSelectableListItemPart(entry) {
+    if (!entry || typeof entry !== 'object') {
+      return entry;
+    }
+    if (!isInlinePdfTextPart(entry)) {
+      return entry;
+    }
+    return Object.assign({}, entry, {
+      fontSize: entry.fontSize || 11,
+      lineHeight: entry.lineHeight || 1.25,
+      noWrap: false
+    });
+  }
+
+  function prefixPdfSelectableListText(marker, textValue, isOrdered) {
+    const markerPart = {
+      text: `${marker} `,
+      bold: Boolean(isOrdered),
+      color: '#334155',
+      fontSize: 11,
+      lineHeight: 1.25,
+      noWrap: true
+    };
+    if (Array.isArray(textValue)) {
+      return [markerPart, ...textValue];
+    }
+    return [markerPart, { text: textValue || '' }];
+  }
+
+  function addPdfListContinuationIndent(entry, hangingIndent) {
+    if (!entry || typeof entry !== 'object') {
+      return entry;
+    }
+    const next = Object.assign({}, entry);
+    const margin = Array.isArray(next.margin) ? next.margin.slice() : [0, 1, 0, 1];
+    margin[0] = Math.max(Number(margin[0]) || 0, hangingIndent);
+    next.margin = margin;
+    return next;
+  }
+
+  function getPdfListHangingIndent(marker) {
+    const length = ensureString(marker).length;
+    return Math.max(9, Math.min(30, length * 4.4 + 4));
   }
 
   function getOrderedListStart(listNode) {
@@ -8145,6 +10153,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return false;
   }
 
+  // ─────────────────────────────────────────────
+  // PDF images, remote resources, and fonts
+  // ─────────────────────────────────────────────
+
   async function requestRemoteText(url, label) {
     if (typeof GM_xmlhttpRequest === 'function') {
       return gmXmlHttpRequestPromise({
@@ -9326,6 +11338,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
+  // ─────────────────────────────────────────────
+  // Download helpers and general utilities
+  // ─────────────────────────────────────────────
+
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, '&amp;')
@@ -10031,10 +12047,22 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
     return chunks.map((chunk) => {
       if (chunk.font) {
-        return { text: chunk.text, font: chunk.font };
+        return buildPdfFontRoutedTextChunk(chunk.text, chunk.font);
       }
       return { text: chunk.text };
     });
+  }
+
+  function buildPdfFontRoutedTextChunk(text, font) {
+    const chunk = {
+      text: text,
+      font: font,
+      lineHeight: 1,
+      noWrap: false,
+      verticalAlign: 'baseline',
+      alignmentBaseline: 'baseline'
+    };
+    return chunk;
   }
 
   function splitPdfTextForFontRouting(text, fontContext) {
@@ -10089,10 +12117,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function resolvePdfSymbolFont(script, fontContext) {
     if (script === 'symbols') {
-      return activePdfEmojiFontFamily || fontContext.scriptFonts.symbolsText || '';
+      return activePdfEmojiFontFamily || fontContext.scriptFonts.symbolsExtra || fontContext.scriptFonts.symbolsText || '';
+    }
+    if (script === 'symbolsExtra') {
+      return fontContext.scriptFonts.symbolsExtra || fontContext.scriptFonts.symbolsText || activePdfEmojiFontFamily || '';
     }
     if (script === 'symbolsText') {
-      return fontContext.scriptFonts.symbolsText || activePdfEmojiFontFamily || '';
+      return fontContext.scriptFonts.symbolsText || fontContext.scriptFonts.symbolsExtra || activePdfEmojiFontFamily || '';
     }
     return '';
   }
@@ -10127,9 +12158,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (containsEmojiStyleForPdf(segment)) {
       return 'symbols';
     }
-    if (containsPdfSymbolTextForRouting(segment)) {
-      return 'symbolsText';
-    }
     if (containsEmojiForPdf(segment)) {
       return 'symbols';
     }
@@ -10141,6 +12169,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       if (pattern && pattern.test(segment)) {
         return script;
       }
+    }
+    if (containsPdfSymbolTextForRouting(segment)) {
+      return 'symbolsText';
     }
     return '';
   }
@@ -10280,6 +12311,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return emojiRegexRef.test(text);
   }
 
+  // ─────────────────────────────────────────────
+  // PDF font routing
+  // ─────────────────────────────────────────────
+
   function ensureBaseFont(pdfMakeInstance) {
     const vfs = pdfMakeInstance.vfs || {};
     const regular = vfs['Roboto-Regular.ttf'] ? 'Roboto-Regular.ttf' :
@@ -10339,6 +12374,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     return null;
   }
+
+  // ─────────────────────────────────────────────
+  // Startup and observers
+  // ─────────────────────────────────────────────
 
   function startObserver() {
     const observer = new MutationObserver((mutations) => {
