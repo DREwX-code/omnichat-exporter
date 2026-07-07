@@ -125,13 +125,14 @@ Everything runs locally.
 
 ### Multilingual PDF Support
 
-The PDF export system supports many writing systems including:
+The PDF export system supports many writing systems, including:
 
-Latin, Extended Latin, Cyrillic, Greek, Arabic, Hebrew, Chinese, Japanese, Korean,  
+Latin, Extended Latin, Cyrillic, Greek, Arabic, Syriac, Hebrew, Chinese, Japanese, Korean,  
 Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam,  
-Sinhala, Thai, Khmer, Lao, Myanmar, Georgian, Armenian, Ethiopic and Egyptian hieroglyphs.
+Sinhala, Thai, Khmer, Lao, Myanmar, Georgian, Armenian, Ethiopic, Canadian Aboriginal syllabics,  
+Tangut, Avestan, Runic, Glagolitic, Cuneiform, Egyptian hieroglyphs, emoji, and extended symbols.
 
-Fonts are automatically loaded depending on detected scripts to keep the export lightweight and reliable.
+Fonts are automatically loaded based on detected scripts to keep the export lightweight and reliable.
 
 </details>
 
