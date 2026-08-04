@@ -6,6 +6,26 @@ The format is based on Keep a Changelog
 and this project adheres to Semantic Versioning.
 
 ---
+
+## [1.2.0] - 2026-08-04
+
+### Added
+
+- Print-friendly mode for PDF exports, reducing background and accent ink usage
+- Export content options for headers, user instructions, and assistant responses
+- Ability to cancel an export in progress, including conversation scrolling and resource downloads
+
+### Improved
+
+- Syntax highlighting and theme adaptation for code blocks in PDF exports
+- Export menu organization, consistency, and overall usability
+
+### Fixed
+
+- Incomplete exports caused by unloaded content in long or virtualized conversations
+- Incorrect export button placement in the ChatGPT header
+
+
 ## [1.1.5] - 2026-07-07
 
 ### Added
