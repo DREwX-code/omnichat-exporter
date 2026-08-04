@@ -2,6 +2,7 @@
  * OmniChat Exporter translations
  * Loaded before the userscript through a local @require during development.
  */
+
 (function (root) {
   "use strict";
 
@@ -860,6 +861,50 @@
     "Exportación no disponible",
   ]);
 
+  const exportControlTranslations = Object.freeze({
+    en: { stopExport: "Stop", exportCancelled: "Export stopped" },
+    fr: { stopExport: "Arrêter", exportCancelled: "Export arrêté" },
+    es: { stopExport: "Detener", exportCancelled: "Exportación detenida" },
+    de: { stopExport: "Stoppen", exportCancelled: "Export gestoppt" },
+    ru: { stopExport: "Остановить", exportCancelled: "Экспорт остановлен" },
+    "zh-CN": { stopExport: "停止", exportCancelled: "导出已停止" },
+    "zh-TW": { stopExport: "停止", exportCancelled: "匯出已停止" },
+    ja: { stopExport: "停止", exportCancelled: "エクスポートを停止しました" },
+    pt: { stopExport: "Parar", exportCancelled: "Exportação interrompida" },
+    it: { stopExport: "Interrompi", exportCancelled: "Esportazione interrotta" },
+    ar: { stopExport: "إيقاف", exportCancelled: "تم إيقاف التصدير" },
+    be: { stopExport: "Спыніць", exportCancelled: "Экспарт спынены" },
+    bg: { stopExport: "Спиране", exportCancelled: "Експортирането е спряно" },
+    cs: { stopExport: "Zastavit", exportCancelled: "Export zastaven" },
+    da: { stopExport: "Stop", exportCancelled: "Eksport stoppet" },
+    el: { stopExport: "Διακοπή", exportCancelled: "Η εξαγωγή διακόπηκε" },
+    eo: { stopExport: "Haltigi", exportCancelled: "Eksporto haltigita" },
+    fi: { stopExport: "Pysäytä", exportCancelled: "Vienti pysäytetty" },
+    he: { stopExport: "עצירה", exportCancelled: "הייצוא הופסק" },
+    hr: { stopExport: "Zaustavi", exportCancelled: "Izvoz zaustavljen" },
+    hu: { stopExport: "Leállítás", exportCancelled: "Exportálás leállítva" },
+    id: { stopExport: "Hentikan", exportCancelled: "Ekspor dihentikan" },
+    ka: { stopExport: "შეჩერება", exportCancelled: "ექსპორტი შეჩერდა" },
+    ko: { stopExport: "중지", exportCancelled: "내보내기 중지됨" },
+    mr: { stopExport: "थांबवा", exportCancelled: "निर्यात थांबवली" },
+    nl: { stopExport: "Stoppen", exportCancelled: "Export gestopt" },
+    nb: { stopExport: "Stopp", exportCancelled: "Eksport stoppet" },
+    pl: { stopExport: "Zatrzymaj", exportCancelled: "Eksport zatrzymany" },
+    "pt-BR": { stopExport: "Parar", exportCancelled: "Exportação interrompida" },
+    ro: { stopExport: "Oprește", exportCancelled: "Export oprit" },
+    sk: { stopExport: "Zastaviť", exportCancelled: "Export zastavený" },
+    sr: { stopExport: "Zaustavi", exportCancelled: "Izvoz zaustavljen" },
+    sv: { stopExport: "Stoppa", exportCancelled: "Export stoppad" },
+    th: { stopExport: "หยุด", exportCancelled: "หยุดการส่งออกแล้ว" },
+    tr: { stopExport: "Durdur", exportCancelled: "Dışa aktarma durduruldu" },
+    ug: { stopExport: "توختىتىش", exportCancelled: "چىقىرىش توختىتىلدى" },
+    uk: { stopExport: "Зупинити", exportCancelled: "Експорт зупинено" },
+    vi: { stopExport: "Dừng", exportCancelled: "Đã dừng xuất" },
+    "fr-CA": { stopExport: "Arrêter", exportCancelled: "Export arrêté" },
+    ckb: { stopExport: "وەستاندن", exportCancelled: "هەناردەکردن وەستێنرا" },
+    "es-419": { stopExport: "Detener", exportCancelled: "Exportación detenida" },
+  });
+
   const localeByLowerCase = Object.keys(translations).reduce((map, locale) => {
     map[locale.toLowerCase()] = locale;
     return map;
@@ -955,7 +1000,14 @@
   function translate(key, variables, locale) {
     const selectedLocale = matchLocale(locale) || activeLocale;
     const dictionary = translations[selectedLocale] || translations.en;
-    const template = dictionary[key] || translations.en[key] || key;
+    const controls =
+      exportControlTranslations[selectedLocale] || exportControlTranslations.en;
+    const template =
+      dictionary[key] ||
+      controls[key] ||
+      translations.en[key] ||
+      exportControlTranslations.en[key] ||
+      key;
     return interpolate(template, variables);
   }
 
