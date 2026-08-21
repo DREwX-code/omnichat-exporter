@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.2.1] - 2026-08-22
+
+### Fixed
+
+- Incorrect rendering of Unicode box-drawing and diagram characters in PDF exports
+
 ## [1.2.0] - 2026-08-04
 
 ### Added
