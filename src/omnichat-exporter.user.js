@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.2.0
+// @version      1.2.1
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -655,6 +655,13 @@ Licenses:
     "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/font/OpenMoji-black-glyf/OpenMoji-black-glyf.ttf",
   ];
   const PDF_SCRIPT_FONT_SPECS = {
+    diagram: {
+      family: "NotoSansMonoDiagram",
+      file: "NotoSansMono-Regular.ttf",
+      urls: [
+        "https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansMono/NotoSansMono-Regular.ttf",
+      ],
+    },
     symbolsText: {
       family: "NotoSansSymbols",
       file: "NotoSansSymbols-Regular.ttf",
@@ -902,10 +909,11 @@ Licenses:
     },
   };
   const PDF_SCRIPT_DETECTION_PATTERNS = {
+    diagram: /[\u2500-\u25FF]/u,
     symbolsText:
       /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u,
     symbolsExtra:
-      /[\u2200-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF]/u,
+      /[\u2200-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF]/u,
     latin: /[A-Za-z\u00C0-\u024F]/u,
     latinExtended:
       /[\u0100-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F\uFB00-\uFB06]/u,
@@ -945,6 +953,7 @@ Licenses:
     cyrillic: /[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]/u,
   };
   const PDF_DIRECT_SCRIPT_SCAN_ORDER = [
+    "diagram",
     "symbolsExtra",
     "symbolsText",
     "latinExtended",
@@ -979,6 +988,7 @@ Licenses:
     "cyrillic",
   ];
   const PDF_SCRIPT_RESOURCE_LABELS = {
+    diagram: "Diagram font",
     symbolsText: "Symbols font",
     symbolsExtra: "Extended symbols font",
     latinExtended: "Extended Latin font",
@@ -1083,6 +1093,7 @@ Licenses:
     "latin",
   ];
   const PDF_SCRIPT_FONT_RETRY_ORDER = [
+    "diagram",
     "arabic",
     "syriac",
     "devanagari",
@@ -1118,9 +1129,9 @@ Licenses:
     /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u;
   const PDF_CJK_SYMBOL_PATTERN = /[\u3000-\u303F\uFF00-\uFFEF]/u;
   const PDF_SYMBOL_TEXT_PATTERN =
-    /[\u2190-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
+    /[\u2190-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
   const PDF_NON_CJK_SYMBOL_TEXT_PATTERN =
-    /[\u2190-\u23FF\u2460-\u24FF\u2500-\u25FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
+    /[\u2190-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
   const PDF_EMOJI_STYLE_PATTERN =
     /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u{FE0F}|\u{20E3}|\u{200D}|[\u{1F100}-\u{1F2FF}])/u;
   const PDF_SAFE_SEGMENTATION_SCRIPTS = [
@@ -14294,6 +14305,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         activePdfFontContext && activePdfFontContext.emojiFontFamily
           ? activePdfFontContext.emojiFontFamily
           : "";
+      configurePdfMonospaceFont(pdfMakeInstance, activePdfFontContext);
       await downloadPdfDocument(
         pdfMakeInstance,
         buildDocDefinition(),
@@ -15682,6 +15694,21 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   // ─────────────────────────────────────────────
   // PDF font routing
   // ─────────────────────────────────────────────
+
+  function configurePdfMonospaceFont(pdfMakeInstance, fontContext) {
+    ensureBaseFont(pdfMakeInstance);
+    if (
+      fontContext &&
+      fontContext.scriptFonts &&
+      fontContext.scriptFonts.diagram
+    ) {
+      registerPdfFont(
+        pdfMakeInstance,
+        "monospace",
+        PDF_SCRIPT_FONT_SPECS.diagram.file,
+      );
+    }
+  }
 
   function ensureBaseFont(pdfMakeInstance) {
     const vfs = pdfMakeInstance.vfs || {};
