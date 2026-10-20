@@ -905,6 +905,50 @@
     "es-419": { stopExport: "Detener", exportCancelled: "Exportación detenida" },
   });
 
+  const pdfProgressTranslations = Object.freeze({
+    en: { pdfPreparing: "Preparing PDF", pdfExporting: "Exporting PDF" },
+    fr: { pdfPreparing: "Préparation du PDF", pdfExporting: "Exportation du PDF" },
+    es: { pdfPreparing: "Preparando PDF", pdfExporting: "Exportando PDF" },
+    de: { pdfPreparing: "PDF wird vorbereitet", pdfExporting: "PDF wird exportiert" },
+    ru: { pdfPreparing: "Подготовка PDF", pdfExporting: "Экспорт PDF" },
+    "zh-CN": { pdfPreparing: "正在准备 PDF", pdfExporting: "正在导出 PDF" },
+    "zh-TW": { pdfPreparing: "正在準備 PDF", pdfExporting: "正在匯出 PDF" },
+    ja: { pdfPreparing: "PDFを準備中", pdfExporting: "PDFをエクスポート中" },
+    pt: { pdfPreparing: "Preparando PDF", pdfExporting: "Exportando PDF" },
+    it: { pdfPreparing: "Preparazione del PDF", pdfExporting: "Esportazione del PDF" },
+    ar: { pdfPreparing: "جارٍ إعداد ملف PDF", pdfExporting: "جارٍ تصدير ملف PDF" },
+    be: { pdfPreparing: "Падрыхтоўка PDF", pdfExporting: "Экспарт PDF" },
+    bg: { pdfPreparing: "Подготовка на PDF", pdfExporting: "Експортиране на PDF" },
+    cs: { pdfPreparing: "Příprava PDF", pdfExporting: "Export PDF" },
+    da: { pdfPreparing: "Forbereder PDF", pdfExporting: "Eksporterer PDF" },
+    el: { pdfPreparing: "Προετοιμασία PDF", pdfExporting: "Εξαγωγή PDF" },
+    eo: { pdfPreparing: "Preparado de PDF", pdfExporting: "Eksportado de PDF" },
+    fi: { pdfPreparing: "Valmistellaan PDF", pdfExporting: "Viedään PDF" },
+    he: { pdfPreparing: "מכין PDF", pdfExporting: "מייצא PDF" },
+    hr: { pdfPreparing: "Priprema PDF-a", pdfExporting: "Izvoz PDF-a" },
+    hu: { pdfPreparing: "PDF előkészítése", pdfExporting: "PDF exportálása" },
+    id: { pdfPreparing: "Menyiapkan PDF", pdfExporting: "Mengekspor PDF" },
+    ka: { pdfPreparing: "PDF-ის მომზადება", pdfExporting: "PDF-ის ექსპორტი" },
+    ko: { pdfPreparing: "PDF 준비 중", pdfExporting: "PDF 내보내는 중" },
+    mr: { pdfPreparing: "PDF तयार करत आहे", pdfExporting: "PDF निर्यात करत आहे" },
+    nl: { pdfPreparing: "PDF voorbereiden", pdfExporting: "PDF exporteren" },
+    nb: { pdfPreparing: "Forbereder PDF", pdfExporting: "Eksporterer PDF" },
+    pl: { pdfPreparing: "Przygotowywanie PDF", pdfExporting: "Eksportowanie PDF" },
+    "pt-BR": { pdfPreparing: "Preparando PDF", pdfExporting: "Exportando PDF" },
+    ro: { pdfPreparing: "Se pregătește PDF-ul", pdfExporting: "Se exportă PDF-ul" },
+    sk: { pdfPreparing: "Príprava PDF", pdfExporting: "Export PDF" },
+    sr: { pdfPreparing: "Припрема PDF-а", pdfExporting: "Извоз PDF-а" },
+    sv: { pdfPreparing: "Förbereder PDF", pdfExporting: "Exporterar PDF" },
+    th: { pdfPreparing: "กำลังเตรียม PDF", pdfExporting: "กำลังส่งออก PDF" },
+    tr: { pdfPreparing: "PDF hazırlanıyor", pdfExporting: "PDF dışa aktarılıyor" },
+    ug: { pdfPreparing: "PDF تەييارلىنىۋاتىدۇ", pdfExporting: "PDF چىقىرىلىۋاتىدۇ" },
+    uk: { pdfPreparing: "Підготовка PDF", pdfExporting: "Експорт PDF" },
+    vi: { pdfPreparing: "Đang chuẩn bị PDF", pdfExporting: "Đang xuất PDF" },
+    "fr-CA": { pdfPreparing: "Préparation du PDF", pdfExporting: "Exportation du PDF" },
+    ckb: { pdfPreparing: "ئامادەکردنی PDF", pdfExporting: "هەناردەکردنی PDF" },
+    "es-419": { pdfPreparing: "Preparando PDF", pdfExporting: "Exportando PDF" },
+  });
+
   const localeByLowerCase = Object.keys(translations).reduce((map, locale) => {
     map[locale.toLowerCase()] = locale;
     return map;
@@ -1002,11 +1046,15 @@
     const dictionary = translations[selectedLocale] || translations.en;
     const controls =
       exportControlTranslations[selectedLocale] || exportControlTranslations.en;
+    const pdfProgress =
+      pdfProgressTranslations[selectedLocale] || pdfProgressTranslations.en;
     const template =
       dictionary[key] ||
       controls[key] ||
+      pdfProgress[key] ||
       translations.en[key] ||
       exportControlTranslations.en[key] ||
+      pdfProgressTranslations.en[key] ||
       key;
     return interpolate(template, variables);
   }
