@@ -9,6 +9,15 @@ body:
         Thanks for reporting a problem with OmniChat Exporter.
         Please provide enough details to help reproduce and fix the issue.
 
+  - type: input
+    id: version
+    attributes:
+      label: OmniChat Exporter version
+      description: Find the version in your userscript manager.
+      placeholder: "Example: 1.3.0"
+    validations:
+      required: true
+
   - type: dropdown
     id: platform
     attributes:
@@ -35,6 +44,24 @@ body:
         - JSON
         - PDF
         - All formats
+        - Not applicable
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Which part of the export is affected most?
+      options:
+        - Export controls or menu
+        - Conversation detection or message order
+        - TXT, Markdown, or JSON content
+        - PDF layout or rendering
+        - Code blocks, math, diagrams, or tables
+        - Images or generated content
+        - Other
         - Not sure
     validations:
       required: true
@@ -90,6 +117,6 @@ body:
     id: screenshots
     attributes:
       label: Screenshots or console errors
-      description: Add screenshots or browser console errors if useful.
+      description: Add screenshots, a sample export with private content removed, or browser console errors if useful. Do not share sensitive conversation content.
     validations:
       required: false
