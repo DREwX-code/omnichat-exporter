@@ -2,8 +2,8 @@ blank_issues_enabled: true
 
 contact_links:
   - name: Questions and general feedback
-    url: url: https://github.com/DREwX-code/omnichat-exporter/discussions
-    about: Ask questions, share feedback, or discuss general usage through GitHub Issues.
+    url: https://github.com/DREwX-code/omnichat-exporter/discussions
+    about: Ask questions, share feedback, or discuss general usage.
 
   - name: Install OmniChat Exporter
     url: https://greasyfork.org/scripts/567743-omnichat-exporter-export-any-ai-chat-instantly
