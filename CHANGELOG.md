@@ -7,6 +7,34 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.3.0] - 2026-10-20
+
+### Added
+
+- PDF support for rendered diagrams, nested task lists, and richer mathematical notation
+- Translation coverage for export progress states across supported interface languages
+
+### Improved
+
+- More resilient conversation collection for virtualized, lazy-loaded, and long conversations
+- PDF rendering for Markdown, rich HTML content, code blocks, nested lists, quotes, diagrams, multilingual text, and complex mathematical expressions
+- Code-block presentation with language labels, syntax-color preservation, compact headers, and safer pagination
+- Export button styling and placement across supported platforms
+- Export menu styling for better visual consistency with each platform interface
+- Platform integration using structural DOM anchors instead of localized action labels where possible
+- Export menu and PDF progress UI isolation to prevent host-page styles from affecting the exporter
+
+### Fixed
+
+- Message ordering issues in Claude exports
+- Missing or incomplete content in exported conversations
+- Missing export controls on ChatGPT and Claude
+- Generated images not being correctly included in some PDF exports
+- Mathematical rendering issues affecting matrices, systems of equations, boxed formulas, and complex notation
+- Font selection and rendering issues affecting mathematical and multilingual PDF content
+- Per-message exports that could omit the related user prompt or select adjacent content
+- Removed obsolete CSS classes and legacy export rendering styles
+
 ## [1.2.1] - 2026-08-22
 
 ### Fixed
