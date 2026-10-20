@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.2.1
+// @version      1.3.0
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -98,18 +98,20 @@
 // @match        https://grok.com/*
 // @match        https://grok.x.ai/*
 // @match        https://chat.deepseek.com/*
+// @match        https://*.web-sandbox.oaiusercontent.com/*
 
 // @grant GM_xmlhttpRequest
 // @grant GM_getValue
 // @grant GM_setValue
 // @connect raw.githubusercontent.com
+// @connect notofonts.github.io
 // @connect esm.sh
 // @connect cdn.jsdelivr.net
 // @connect github.com
 // @connect lh3.googleusercontent.com
 // @connect *.googleusercontent.com
 
-// @require      https://update.greasyfork.org/scripts/589875/1893410/OmniChat%20Exporter%20-%20Translation%20Library.js
+// @require      https://update.greasyfork.org/scripts/589875/1969247/OmniChat%20Exporter%20-%20Translation%20Library.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js
 // @run-at       document-idle
@@ -182,6 +184,11 @@ Licenses:
   "use strict";
 
   const host = location.hostname;
+  // Bridge for ChatGPT visualizations rendered in isolated sandbox iframes.
+  if (isChatGptVisualizationSandboxHost(host)) {
+    installChatGptVisualizationSandboxBridge();
+    return;
+  }
   const platform = detectPlatform(host);
   if (!platform) {
     return;
@@ -240,13 +247,18 @@ Licenses:
   const STYLE_ID = "omni-exporter-style";
   const EXPORT_BUTTON_CLASS = "omni-exporter-btn";
   const SHARE_BUTTON_SELECTOR =
-    'button[data-testid="copy-turn-action-button"], button[data-testid="share-chat-button"]';
-  const TURN_SELECTOR = '[data-testid^="conversation-turn"]';
-  const HEADER_ACTIONS_SELECTOR = "#conversation-header-actions";
+    'button[data-testid="copy-turn-action-button"], button[data-testid="share-chat-button"], .turn-action-controls button[aria-label]';
+  const TURN_SELECTOR =
+    '[data-testid^="conversation-turn"], [data-content-search-unit-key], [data-chatgpt-search-message-ids]';
+  const HEADER_ACTIONS_SELECTOR =
+    '#conversation-header-actions, [data-testid="app-shell-header-context-menu-surface"] > [data-app-shell-header-obstacle="true"]';
   const HEADER_EXPORT_ATTR = "data-omni-export-header";
   const EXPORT_SCOPE_ATTR = "data-omni-scope";
   const CHATGPT_TOOLTIP_STYLE_ID = "omni-gpt-tooltip-style";
   const CHATGPT_TOOLTIP_BOUND_ATTR = "data-omni-gpt-tooltip-bound";
+  // ChatGPT's tooltip provider currently uses a 200 ms initial delay.
+  const CHATGPT_TOOLTIP_SHOW_DELAY_MS = 200;
+  const CHATGPT_TOOLTIP_CLOSE_POLL_MS = 40;
 
   // Grok
   const GROK_EXPORT_ATTR = "data-omni-export-grok";
@@ -261,10 +273,12 @@ Licenses:
   const GROK_THREAD_TOOLTIP_DELAY_MS = 300;
   const GROK_TOOLTIP_CLOSE_MS = 165;
   const GROK_THREAD_EXPORT_CLASS =
-    `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] ` +
-    `cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 ` +
-    `[&_svg]:shrink-0 select-none text-fg-secondary hover:bg-button-ghost-hover hover:text-fg-primary disabled:hover:bg-transparent ` +
-    `border border-transparent rounded-full overflow-hidden h-10 w-10 p-2`;
+    `inline-flex items-center justify-center whitespace-nowrap text-sm font-medium leading-[1.4] tracking-[-0.2px] ` +
+    `cursor-pointer outline-hidden focus:outline-hidden focus-visible:ring-1 disabled:opacity-50 disabled:pointer-events-none focus-visible:ring-fg-accent transition-colors duration-100 ` +
+    `[&_svg]:shrink-0 select-none text-fg-secondary hover:bg-button-secondary-fill-hover active:bg-button-secondary-fill-active hover:text-fg-primary ` +
+    `border border-transparent aria-pressed:bg-button-secondary-fill-hover aria-pressed:text-fg-primary aria-checked:bg-button-secondary-fill-hover aria-checked:text-fg-primary ` +
+    `aria-[current=page]:bg-button-secondary-fill-hover aria-[current=page]:text-fg-primary data-[state=open]:bg-button-secondary-fill-hover data-[state=open]:text-fg-primary ` +
+    `h-8 rounded-xl gap-1 overflow-hidden w-8 px-1.5 py-1.5 shrink-0`;
   const GROK_TURN_EXPORT_CLASS =
     `inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] cursor-pointer ` +
     `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed transition-colors duration-100 ` +
@@ -303,10 +317,11 @@ Licenses:
   const CLAUDE_HEADER_SELECTOR = '[data-testid="wiggle-controls-actions"]';
   const CLAUDE_SHARE_SELECTOR = '[data-testid="wiggle-controls-actions-share"]';
   const CLAUDE_THREAD_EXPORT_ATTR = "data-omni-export-claude-thread";
-  const CLAUDE_ACTIONS_SELECTOR = "[data-message-action-bar]";
-  const CLAUDE_COPY_SELECTOR = '[data-testid="action-bar-copy"]';
+  const CLAUDE_ACTIONS_SELECTOR =
+    '[data-message-action-bar], [data-testid="message-actions"], [data-cds="MessageActions"]';
+  const CLAUDE_COPY_SELECTOR =
+    '[data-testid="action-bar-copy"], [data-message-action-bar] button, [data-cds="MessageActions"] button';
   const CLAUDE_TURN_EXPORT_ATTR = "data-omni-export-claude-turn";
-  const CLAUDE_TOOLTIP_BOUND_ATTR = "data-omni-claude-tooltip-bound";
   const CLAUDE_TOOLTIP_DELAY_MS = 500;
   const CLAUDE_TOOLTIP_SKIP_DELAY_MS = 300;
   const CLAUDE_TOOLTIP_HIDE_DELAY_MS = 120;
@@ -363,6 +378,9 @@ Licenses:
     dark: Object.freeze({
       default: "#ffffff",
       keyword: "#f8a6c8",
+      literal: "#f1a275",
+      name: "#63a8f8",
+      attribute: "#f9dc78",
       identifier: "#b897f4",
       string: "#83d197",
       number: "#f1a275",
@@ -372,6 +390,9 @@ Licenses:
     light: Object.freeze({
       default: "#0d0d0d",
       keyword: "#ab4f7a",
+      literal: "#ac4f23",
+      name: "#1f4e94",
+      attribute: "#b8802b",
       identifier: "#643cae",
       string: "#3a843f",
       number: "#ac4f23",
@@ -501,6 +522,10 @@ Licenses:
   ]);
   const PDF_A4_WIDTH_PT = 595.28;
   const PDF_PAGE_MARGINS = [42, 38, 42, 50];
+  // Shared PDF rhythm for every supported platform.
+  const PDF_BODY_LINE_HEIGHT = 1.48;
+  const PDF_LIST_LINE_HEIGHT = 1.3;
+  const PDF_CODE_LINE_HEIGHT = 1.38;
   const PDF_CONTENT_WIDTH_PT =
     PDF_A4_WIDTH_PT - PDF_PAGE_MARGINS[0] - PDF_PAGE_MARGINS[2];
   const PDF_TABLE_SAFE_RIGHT_MARGIN_PT = 28;
@@ -645,8 +670,26 @@ Licenses:
     literal_property: { color: "#990055" },
   };
   const NON_EXPORTABLE_NODE_SELECTOR =
-    'button, svg, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"], ' +
-    ".cdk-visually-hidden, .visually-hidden, .sr-only, [hidden]";
+    'button, [role="button"], script, style, .omni-exporter-btn, [data-test-id="action-bar-copy"], ' +
+    '[data-testid="chatgpt-citation"], [data-markdown-copy="exclude"], [data-code-block-controls], .turn-action-controls, ' +
+    '[data-cds="TurnStatus"], [data-testid="failed-send-status-region"], [data-testid="message-actions"], ' +
+    '[data-cds="MessageActions"], [data-message-action-bar], time[data-cds="RelativeTime"], ' +
+    '.cdk-visually-hidden, .visually-hidden, .sr-only, [hidden]';
+  const CHATGPT_VISUALIZATION_FRAME_SELECTOR =
+    '.VisualizationBlock-BXpp50 iframe[title], [class*="VisualizationBlock"] iframe[title]';
+  const CHATGPT_VISUALIZATION_BRIDGE_REQUEST = "omnichat-exporter:visualization-request";
+  const CHATGPT_VISUALIZATION_BRIDGE_RESPONSE = "omnichat-exporter:visualization-response";
+  const EXPORT_RENDER_SETTLE_TIMEOUT_MS = 4000;
+  const EXPORT_RENDER_SETTLE_POLL_MS = 120;
+  const MARKDOWN_CODE_LANGUAGES = new Set([
+    "bash", "c", "c#", "c++", "cpp", "csharp", "css", "csv", "diff",
+    "dockerfile", "go", "graphql", "html", "http", "ini", "java",
+    "javascript", "js", "json", "jsx", "kotlin", "latex", "less",
+    "lua", "markdown", "md", "mermaid", "php", "plaintext", "python",
+    "py", "r", "ruby", "rs", "rust", "sass", "scss", "shell", "sh",
+    "sql", "svg", "swift", "text", "toml", "tsx", "typescript", "ts",
+    "xml", "yaml", "yml", "zsh",
+  ]);
   // ─────────────────────────────────────────────
   // PDF fonts and language detection
   // ─────────────────────────────────────────────
@@ -674,6 +717,13 @@ Licenses:
       file: "NotoSansSymbols2-Regular.ttf",
       urls: [
         "https://raw.githubusercontent.com/notofonts/noto-fonts/main/hinted/ttf/NotoSansSymbols2/NotoSansSymbols2-Regular.ttf",
+      ],
+    },
+    math: {
+      family: "NotoSansMath",
+      file: "NotoSansMath-Regular.ttf",
+      urls: [
+        "https://notofonts.github.io/math/fonts/NotoSansMath/full/ttf/NotoSansMath-Regular.ttf",
       ],
     },
     latinExtended: {
@@ -914,9 +964,11 @@ Licenses:
       /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u2600-\u27BF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u,
     symbolsExtra:
       /[\u2200-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF]/u,
+    math:
+      /[\u00B1\u00D7\u00F7\u2070-\u209F\u2100-\u214F\u2190-\u22FF\u27C0-\u27EF\u2980-\u2AFF\u{1D400}-\u{1D7FF}]/u,
     latin: /[A-Za-z\u00C0-\u024F]/u,
     latinExtended:
-      /[\u0100-\u024F\u1E00-\u1EFF\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F\uFB00-\uFB06]/u,
+      /[\u0100-\u024F\u1E00-\u1EFF\u2070-\u209F\u2C60-\u2C7F\uA720-\uA7FF\uAB30-\uAB6F\uFB00-\uFB06]/u,
     chinese:
       /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2EBEF}\u{30000}-\u{323AF}]/u,
     japanese: /[\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF]/u,
@@ -954,6 +1006,7 @@ Licenses:
   };
   const PDF_DIRECT_SCRIPT_SCAN_ORDER = [
     "diagram",
+    "math",
     "symbolsExtra",
     "symbolsText",
     "latinExtended",
@@ -987,45 +1040,6 @@ Licenses:
     "greek",
     "cyrillic",
   ];
-  const PDF_SCRIPT_RESOURCE_LABELS = {
-    diagram: "Diagram font",
-    symbolsText: "Symbols font",
-    symbolsExtra: "Extended symbols font",
-    latinExtended: "Extended Latin font",
-    chinese: "Chinese font",
-    japanese: "Japanese font",
-    korean: "Korean font",
-    arabic: "Arabic font",
-    syriac: "Assyrian / Syriac font",
-    devanagari: "Devanagari font",
-    bengali: "Bengali font",
-    gurmukhi: "Gurmukhi font",
-    gujarati: "Gujarati font",
-    odia: "Odia font",
-    tamil: "Tamil font",
-    telugu: "Telugu font",
-    kannada: "Kannada font",
-    malayalam: "Malayalam font",
-    sinhala: "Sinhala font",
-    thai: "Thai font",
-    lao: "Lao font",
-    myanmar: "Myanmar font",
-    khmer: "Khmer font",
-    hebrew: "Hebrew font",
-    canadianAboriginal: "Inuktut syllabics font",
-    tangut: "Tangut font",
-    avestan: "Avestan font",
-    armenian: "Armenian font",
-    georgian: "Georgian font",
-    ethiopic: "Amharic / Ethiopic font",
-    egyptianHieroglyphs: "Egyptian hieroglyph font",
-    runic: "Runic font",
-    glagolitic: "Glagolitic font",
-    cuneiform: "Cuneiform font",
-    greek: "Greek font",
-    cyrillic: "Cyrillic font",
-    emoji: "Emoji / symbols font",
-  };
   const PDF_SCRIPT_FALLBACK_LANGUAGE_MAP = {
     chinese: "zh",
     japanese: "ja",
@@ -1093,6 +1107,10 @@ Licenses:
     "latin",
   ];
   const PDF_SCRIPT_FONT_RETRY_ORDER = [
+    "math",
+    "latinExtended",
+    "symbolsExtra",
+    "symbolsText",
     "diagram",
     "arabic",
     "syriac",
@@ -1132,6 +1150,8 @@ Licenses:
     /[\u2190-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u3000-\u303D\u3200-\u32FF\u{1F100}-\u{1F2FF}]/u;
   const PDF_NON_CJK_SYMBOL_TEXT_PATTERN =
     /[\u2190-\u23FF\u2460-\u24FF\u2600-\u27BF\u2800-\u28FF\u2900-\u297F\u2B00-\u2BFF\u{1F100}-\u{1F2FF}]/u;
+  const PDF_MATH_SYMBOL_PATTERN =
+    /[\u00B1\u00D7\u00F7\u2070-\u209F\u2100-\u214F\u2190-\u22FF\u27C0-\u27EF\u2980-\u2AFF\u{1D400}-\u{1D7FF}]/u;
   const PDF_EMOJI_STYLE_PATTERN =
     /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u{FE0F}|\u{20E3}|\u{200D}|[\u{1F100}-\u{1F2FF}])/u;
   const PDF_SAFE_SEGMENTATION_SCRIPTS = [
@@ -1156,6 +1176,14 @@ Licenses:
   ];
   const PDF_LATIN_COMBINING_MARK_PATTERN =
     /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF]/u;
+  // Safe substitutes for combining glyphs unavailable in the selected font.
+  const PDF_COMBINING_MARK_FALLBACKS = {
+    "\u0322": "\u0326", // retroflex hook below -> comma below
+    "\u0334": "\u0338", // tilde overlay -> solidus overlay
+    "\u0335": "\u0338", // short stroke overlay -> solidus overlay
+    "\u0336": "\u0338", // long stroke overlay -> solidus overlay
+    "\u0337": "\u0338", // short solidus overlay -> long solidus overlay
+  };
   const PDF_TOKEN_BREAK_PATTERN =
     /[\s\u0000-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u2000-\u206F\u3000-\u303F]/u;
   const PDF_LANGUAGE_CODE_MAP = {
@@ -1249,6 +1277,13 @@ Licenses:
   let chatGptTooltip = null;
   let chatGptTooltipTarget = null;
   let chatGptTooltipCleanup = null;
+  let chatGptTooltipShowTimer = null;
+  let chatGptNativeTooltipTrackerInstalled = false;
+  let chatGptLastNativeTooltipTrigger = null;
+  let chatGptLastNativeTooltipLeftAt = 0;
+  let chatGptTooltipDelegationInstalled = false;
+  let chatGptTooltipHoverTarget = null;
+  let chatGptExportClickDelegationInstalled = false;
   let chatGptThemeObserver = null;
   let chatGptThemeSyncQueued = false;
   let claudeTooltipWarmUntil = 0;
@@ -1270,7 +1305,6 @@ Licenses:
   let grokTooltipHideTimer = null;
   let grokTooltipScrollCleanup = null;
   let grokTooltipAnchorCleanup = null;
-  let lastGeminiThreadInjectionLogKey = "";
   let pdfMakeRef = null;
   let activePdfFontContext = null;
   let activePdfEmojiFontFamily = "";
@@ -1281,6 +1315,9 @@ Licenses:
   let trustedHtmlPolicyUnavailable = false;
   let emojiRegexRef = null;
   let graphemeSegmenterRef = null;
+  const chatGptVisualizationPayloads = new WeakMap();
+  const chatGptVisualizationRequests = new Map();
+  let chatGptVisualizationBridgeListenerInstalled = false;
 
   // ─────────────────────────────────────────────
   // Shared stylesheet
@@ -1354,6 +1391,7 @@ button[${GROK_THREAD_EXPORT_ATTR}] {
   margin-bottom: 0 !important;
 }
 
+
 button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] > span {
   display: inline-flex !important;
   align-items: center !important;
@@ -1364,8 +1402,8 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] > span {
 }
 
 button[${GROK_EXPORT_ATTR}][data-omni-scope="thread"] svg {
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
@@ -1386,15 +1424,39 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
   opacity: 0;
   transform: translateY(-3px);
   transition: opacity 0.1s ease, transform 0.1s ease;
-  font-family: inherit;
+  /* Keep this overlay independent from each AI site's design system. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-kerning: auto !important;
+  font-feature-settings: normal !important;
+  font-optical-sizing: auto !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
   color-scheme: dark;
   isolation: isolate;
-  line-height: normal;
+  line-height: 1.35 !important;
 }
 
 .${MENU_CLASS},
 .${MENU_CLASS} * {
   box-sizing: border-box;
+}
+
+.${MENU_CLASS} * {
+  font-family: inherit !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-kerning: auto !important;
+  font-feature-settings: normal !important;
+  font-optical-sizing: auto !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
 }
 
 .${MENU_CLASS} button {
@@ -1436,9 +1498,10 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
   width: 100% !important;
   display: flex !important;
   align-items: center !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
   min-height: 32px !important;
-  padding: 7px 8px !important;
+  padding: 7px 9px !important;
   border-radius: 6px !important;
   border: 1px solid transparent !important;
   background: transparent !important;
@@ -1449,9 +1512,46 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
   cursor: pointer !important;
 }
 
+.${MENU_CLASS} .omni-exporter-format-icon {
+  display: inline-flex !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex: 0 0 16px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #94a3b8 !important;
+}
+
+.${MENU_CLASS} .omni-exporter-format-icon svg {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.7 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+.${MENU_CLASS} .${MENU_ITEM_CLASS}[data-format="pdf"] .omni-exporter-format-icon {
+  color: #fb7185 !important;
+}
+
+.${MENU_CLASS} .${MENU_ITEM_CLASS}[data-format="md"] .omni-exporter-format-icon {
+  color: #a78bfa !important;
+}
+
+.${MENU_CLASS} .${MENU_ITEM_CLASS}[data-format="json"] .omni-exporter-format-icon {
+  color: #fbbf24 !important;
+}
+
 .${MENU_CLASS} .${MENU_ITEM_CLASS}:hover {
   background: rgba(148, 163, 184, 0.1) !important;
   border-color: rgba(148, 163, 184, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.${MENU_CLASS} .${MENU_ITEM_CLASS}:hover .omni-exporter-format-icon {
   color: #f8fafc !important;
 }
 
@@ -1573,7 +1673,7 @@ button[${GROK_EXPORT_ATTR}][data-omni-scope="turn"] svg {
   outline-offset: 1px !important;
 }
 
-.omni-exporter-btn:not(.omni-exporter-grok):not(.text-token-text-secondary):not([data-omni-export-claude-thread]):not([data-omni-export-claude-turn]) { color: #f3f3f3 !important; }
+.omni-exporter-btn:not(.omni-exporter-grok):not(.omni-exporter-chatgpt-turn):not(.text-token-text-secondary):not([data-omni-export-claude-thread]):not([data-omni-export-claude-turn]) { color: #f3f3f3 !important; }
 .omni-exporter-btn.text-token-text-secondary[data-omni-scope="turn"] svg path {
   stroke: currentColor !important;
 }
@@ -1782,6 +1882,41 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   display: flex;
   justify-content: flex-end;
   pointer-events: none;
+  isolation: isolate;
+  direction: ltr !important;
+  text-align: left !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-kerning: auto !important;
+  font-feature-settings: normal !important;
+  font-optical-sizing: auto !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+  word-spacing: normal !important;
+  white-space: normal !important;
+  line-height: normal !important;
+}
+
+.omni-exporter-pdf-loader,
+.omni-exporter-pdf-loader *,
+.omni-exporter-pdf-loader *::before,
+.omni-exporter-pdf-loader *::after {
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-kerning: auto !important;
+  font-feature-settings: normal !important;
+  font-optical-sizing: auto !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
+  text-indent: 0 !important;
+  word-spacing: normal !important;
+  -webkit-text-stroke: 0 transparent !important;
 }
 
 .omni-exporter-pdf-loader-panel {
@@ -1799,6 +1934,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   backdrop-filter: blur(14px);
   pointer-events: auto;
   box-sizing: border-box;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  font-stretch: normal !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+  text-wrap: wrap !important;
+  overflow-wrap: anywhere !important;
+  list-style: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
 }
 
 .omni-exporter-pdf-loader-head {
@@ -1835,11 +1980,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   border-radius: 999px;
   background: rgba(127, 29, 29, 0.18);
   color: #fecaca;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  font: inherit !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: background-color 0.12s ease, color 0.12s ease !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  text-align: center !important;
+  text-decoration: none !important;
 }
 
 .omni-exporter-pdf-loader-stop:hover {
@@ -1858,24 +2008,27 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 }
 
 .omni-exporter-pdf-loader-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: #f8fafc;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0.01em !important;
+  color: #f8fafc !important;
 }
 
 .omni-exporter-pdf-loader-stage {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.35;
-  color: #94a3b8;
+  margin-top: 3px !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  color: #94a3b8 !important;
 }
 
 .omni-exporter-pdf-loader-detail {
-  margin-top: 6px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #cbd5e1;
+  margin-top: 6px !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.45 !important;
+  color: #cbd5e1 !important;
 }
 
 .omni-exporter-pdf-loader-progress {
@@ -1905,9 +2058,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 }
 
 .omni-exporter-pdf-loader-progress-meta {
-  margin-top: 6px;
-  font-size: 11px;
-  color: #94a3b8;
+  margin-top: 6px !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  color: #94a3b8 !important;
 }
 
 @media (max-width: 640px) {
@@ -1999,49 +2154,31 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   left: 0;
   top: 0;
   transform: translate(-9999px, -9999px);
-  min-width: max-content;
-  will-change: transform;
-  z-index: 50;
   pointer-events: none;
 }
 
 .omni-gpt-tooltip {
   position: relative;
-  z-index: 50;
-  box-sizing: border-box;
-  max-width: 20rem;
-  padding: 4px 8px;
-  overflow: hidden;
-  border-radius: 8px;
-  border: 1px solid var(--border-token-border-tooltip, var(--border-tooltip, rgba(255, 255, 255, 0.05)));
-  background: var(--token-bg-tooltip, var(--bg-tooltip, #1b1b1b));
   opacity: 0;
   user-select: none;
-  transition: opacity 120ms ease;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 
 .omni-gpt-tooltip[data-state="delayed-open"] {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .omni-gpt-tooltip[data-state="closed"] {
   opacity: 0;
+  transform: translateY(-2px);
 }
 
-.omni-gpt-tooltip-inner {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.omni-gpt-tooltip[data-side="top"][data-state="closed"] {
+  transform: translateY(2px);
 }
 
-.omni-gpt-tooltip-text {
-  color: var(--text-token-text-primary, var(--text-primary, #fff));
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 600;
-  white-space: pre-wrap;
-  text-align: center;
-}
 `;
     document.head.appendChild(style);
   }
@@ -2060,20 +2197,19 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     wrapper.className = "omni-gpt-tooltip-wrapper";
 
     const tooltip = document.createElement("div");
-    tooltip.className = "omni-gpt-tooltip dark";
+    tooltip.className =
+      "omni-gpt-tooltip w-fit text-sm whitespace-normal break-words min-h-min select-none z-50 textTheme-uIegu3 text-center rounded-2xl border border-(color:--color-border-tooltip) bg-(--color-background-tooltip) text-(color:--color-text-tooltip) leading-4.5 font-(weight:--tooltip-compact-font-weight) tracking-(--tracking-tooltip) shadow-(--shadow-tooltip) px-3 py-1.25 pointer-events-none";
+    tooltip.setAttribute("role", "tooltip");
+    tooltip.setAttribute("data-omni-chatgpt-tooltip", "true");
     tooltip.setAttribute("data-side", "bottom");
     tooltip.setAttribute("data-align", "center");
     tooltip.setAttribute("data-state", "closed");
 
     const inner = document.createElement("div");
-    inner.className = "omni-gpt-tooltip-inner";
-
-    const innerWrap = document.createElement("div");
+    inner.className = "flex gap-2 items-center";
     const text = document.createElement("div");
-    text.className = "omni-gpt-tooltip-text";
-
-    innerWrap.appendChild(text);
-    inner.appendChild(innerWrap);
+    text.className = "min-w-0";
+    inner.appendChild(text);
     tooltip.appendChild(inner);
     wrapper.appendChild(tooltip);
     document.body.appendChild(wrapper);
@@ -2090,17 +2226,156 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     ) {
       return;
     }
+    installChatGptNativeTooltipTracker();
+    installChatGptTooltipDelegation();
     button.setAttribute(CHATGPT_TOOLTIP_BOUND_ATTR, "true");
+    button.setAttribute("data-omni-gpt-tooltip-label", label || t("export"));
     button.removeAttribute("title");
+  }
 
-    const show = () => showChatGptTooltip(button, label);
-    const hide = () => hideChatGptTooltip();
+  function installChatGptTooltipDelegation() {
+    if (chatGptTooltipDelegationInstalled || platform !== "chatgpt") {
+      return;
+    }
+    chatGptTooltipDelegationInstalled = true;
+    const getButton = (node) =>
+      node instanceof Element
+        ? node.closest(`button[${CHATGPT_TOOLTIP_BOUND_ATTR}="true"]`)
+        : null;
+    const show = (event) => {
+      const button = getButton(event.target);
+      if (
+        !button ||
+        (event.relatedTarget instanceof Node &&
+          button.contains(event.relatedTarget))
+      ) {
+        return;
+      }
+      chatGptTooltipHoverTarget = button;
+      scheduleChatGptTooltip(
+        button,
+        button.getAttribute("data-omni-gpt-tooltip-label") || t("export"),
+      );
+    };
+    const hide = (event) => {
+      const button = getButton(event.target);
+      if (
+        !button ||
+        (event.relatedTarget instanceof Node &&
+          button.contains(event.relatedTarget))
+      ) {
+        return;
+      }
+      if (chatGptTooltipHoverTarget === button) {
+        chatGptTooltipHoverTarget = null;
+      }
+      if (chatGptTooltipTarget === button) {
+        hideChatGptTooltip();
+      } else {
+        clearChatGptTooltipShowTimer();
+      }
+    };
+    document.addEventListener("pointerover", show, true);
+    document.addEventListener("pointerout", hide, true);
+    document.addEventListener("focusin", show, true);
+    document.addEventListener("focusout", hide, true);
+    document.addEventListener("mousedown", hide, true);
+  }
 
-    button.addEventListener("mouseenter", show);
-    button.addEventListener("focus", show);
-    button.addEventListener("mouseleave", hide);
-    button.addEventListener("blur", hide);
-    button.addEventListener("mousedown", hide, true);
+  function scheduleChatGptTooltip(button, label) {
+    clearChatGptTooltipShowTimer();
+    const nativeTrigger = getRecentlyLeftNativeTooltipPeer(button);
+    const tryShow = () => {
+      if (
+        !button.isConnected ||
+        (chatGptTooltipHoverTarget !== button &&
+          document.activeElement !== button)
+      ) {
+        chatGptTooltipShowTimer = null;
+        return;
+      }
+      if (nativeTrigger && nativeTrigger.hasAttribute("aria-describedby")) {
+        chatGptTooltipShowTimer = window.setTimeout(
+          tryShow,
+          CHATGPT_TOOLTIP_CLOSE_POLL_MS,
+        );
+        return;
+      }
+      chatGptTooltipShowTimer = null;
+      showChatGptTooltip(button, label);
+    };
+    // Let Radix complete portal cleanup before showing the export tooltip.
+    const initialDelay = nativeTrigger ? 0 : CHATGPT_TOOLTIP_SHOW_DELAY_MS;
+    chatGptTooltipShowTimer = window.setTimeout(
+      () => queueMicrotask(tryShow),
+      initialDelay,
+    );
+  }
+
+  function installChatGptNativeTooltipTracker() {
+    if (chatGptNativeTooltipTrackerInstalled || platform !== "chatgpt") {
+      return;
+    }
+    chatGptNativeTooltipTrackerInstalled = true;
+    document.addEventListener(
+      "pointerout",
+      (event) => {
+        const trigger = getNativeTooltipTrigger(event.target);
+        if (!trigger || trigger.hasAttribute(EXPORT_SCOPE_ATTR)) {
+          return;
+        }
+        if (
+          event.relatedTarget instanceof Node &&
+          trigger.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        // aria-describedby is Radix's authoritative open/closing signal.
+        if (trigger.hasAttribute("aria-describedby")) {
+          chatGptLastNativeTooltipTrigger = trigger;
+          chatGptLastNativeTooltipLeftAt = Date.now();
+        }
+      },
+      true,
+    );
+  }
+
+  function getNativeTooltipTrigger(node) {
+    return node instanceof Element
+      ? node.closest("button[aria-label]")
+      : null;
+  }
+
+  function getRecentlyLeftNativeTooltipPeer(button) {
+    const trigger = chatGptLastNativeTooltipTrigger;
+    if (
+      !trigger ||
+      !trigger.isConnected ||
+      Date.now() - chatGptLastNativeTooltipLeftAt > 500 ||
+      !areChatGptTooltipPeers(button, trigger)
+    ) {
+      return null;
+    }
+    return trigger;
+  }
+
+  function areChatGptTooltipPeers(first, second) {
+    const firstBar = first.closest(".turn-action-controls");
+    const secondBar = second.closest(".turn-action-controls");
+    if (firstBar || secondBar) {
+      return firstBar === secondBar && firstBar !== null;
+    }
+    const firstHeader = first.closest(HEADER_ACTIONS_SELECTOR);
+    const secondHeader = second.closest(HEADER_ACTIONS_SELECTOR);
+    return firstHeader === secondHeader && firstHeader !== null;
+  }
+
+  function clearChatGptTooltipShowTimer() {
+    if (chatGptTooltipShowTimer === null) {
+      return;
+    }
+    window.clearTimeout(chatGptTooltipShowTimer);
+    chatGptTooltipShowTimer = null;
   }
 
   function showChatGptTooltip(button, label) {
@@ -2120,6 +2395,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function hideChatGptTooltip() {
+    clearChatGptTooltipShowTimer();
     if (!chatGptTooltip) {
       return;
     }
@@ -2157,16 +2433,33 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const width = tooltipRect.width || 64;
     const height = tooltipRect.height || 24;
     const padding = 8;
+    // Match ChatGPT action-tooltip spacing.
+    const topGutter = 4;
+    const bottomGutter = 6;
     const viewportWidth =
       window.innerWidth || document.documentElement.clientWidth || 0;
     const viewportHeight =
       window.innerHeight || document.documentElement.clientHeight || 0;
-    const bottomY = rect.bottom + padding;
-    const topY = rect.top - height - padding;
+    const bottomY = rect.bottom + bottomGutter;
+    const topY = rect.top - height - topGutter;
+    const actionBar = button.closest(".turn-action-controls");
+    const configuredSide = actionBar
+      ? window
+        .getComputedStyle(actionBar)
+        .getPropertyValue("--side-tooltip")
+        .trim()
+      : "";
+    const preferredSide = configuredSide === "top" ? "top" : "bottom";
+    const bottomFits = bottomY + height <= viewportHeight - padding;
+    const topFits = topY >= padding;
     const side =
-      bottomY + height <= viewportHeight - padding || topY < padding
-        ? "bottom"
-        : "top";
+      preferredSide === "top"
+        ? topFits || !bottomFits
+          ? "top"
+          : "bottom"
+        : bottomFits || !topFits
+          ? "bottom"
+          : "top";
     const rawX = rect.left + rect.width / 2 - width / 2;
     const maxX = Math.max(padding, viewportWidth - width - padding);
     const x = Math.max(padding, Math.min(maxX, rawX));
@@ -2222,7 +2515,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
       const title = document.createElement("div");
       title.className = "omni-exporter-pdf-loader-title";
-      title.textContent = "Preparing export...";
+      title.textContent = t("pdfPreparing");
 
       const stageNode = document.createElement("div");
       stageNode.className = "omni-exporter-pdf-loader-stage";
@@ -2258,7 +2551,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       loader.appendChild(panel);
       document.body.appendChild(loader);
     }
-    updatePdfExportLoader(stage || "Scanning chat content...");
+    updatePdfExportLoader(stage || createPdfLoaderState(1, 0));
     return loader;
   }
 
@@ -2315,7 +2608,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function normalizePdfExportLoaderState(state) {
     if (typeof state === "string") {
       return {
-        stage: ensureString(state || "Preparing export..."),
+        stage: ensureString(state || getPdfLoaderStage(1)),
         detail: "",
         progress: 0,
         progressText: "",
@@ -2324,11 +2617,36 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     const next = state && typeof state === "object" ? state : {};
     return {
-      stage: ensureString(next.stage || "Preparing export..."),
+      stage: ensureString(next.stage || getPdfLoaderStage(1)),
       detail: ensureString(next.detail),
       progress: clampPdfLoaderProgress(next.progress),
       progressText: ensureString(next.progressText),
       indeterminate: next.indeterminate !== false,
+    };
+  }
+
+  function getPdfLoaderStage(step, completed) {
+    if (completed) {
+      return t("exportOk");
+    }
+    const clampedStep = Math.max(1, Math.min(5, Number(step) || 1));
+    const label = clampedStep === 1 ? t("pdfPreparing") : t("pdfExporting");
+    return `${label} · ${clampedStep}/5`;
+  }
+
+  function createPdfLoaderState(step, progress, options) {
+    const source = options || {};
+    return {
+      stage: getPdfLoaderStage(step, source.completed === true),
+      detail: ensureString(source.detail),
+      progress: progress,
+      progressText:
+        source.progressText === false
+          ? ""
+          : typeof source.progressText === "string"
+            ? source.progressText
+            : `${Math.max(1, Math.min(5, Number(step) || 1))}/5`,
+      indeterminate: source.indeterminate === true,
     };
   }
 
@@ -2495,50 +2813,229 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function attachChatGptButtons(root) {
     const scope = root || document;
-
-    let turns = [];
+    removeChatGptGalleryExportButtons(scope);
+    const turns = new Set();
     if (scope.matches && scope.matches(TURN_SELECTOR)) {
-      turns.push(scope);
+      turns.add(scope);
     }
     if (scope.querySelectorAll) {
-      const found = scope.querySelectorAll(TURN_SELECTOR);
-      if (found.length > 0) {
-        turns = Array.from(found);
-      }
+      scope.querySelectorAll(TURN_SELECTOR).forEach((turn) => turns.add(turn));
     }
+    // ChatGPT can render action bars after their message content.
+    const actionBars = [];
+    if (scope.matches && scope.matches(".turn-action-controls")) {
+      actionBars.push(scope);
+    }
+    if (scope.querySelectorAll) {
+      scope.querySelectorAll(".turn-action-controls").forEach((bar) => {
+        actionBars.push(bar);
+      });
+    }
+    actionBars.forEach((bar) => {
+      const turn = findChatGptTurnForActionBar(bar);
+      if (isChatGptAssistantActionBar(bar, turn)) {
+        if (turn) {
+          turns.add(turn);
+        }
+        attachChatGptActionBarExportButton(bar);
+        return;
+      }
+      // Keep per-message export controls on assistant messages only.
+      bar
+        .querySelectorAll(`.${EXPORT_BUTTON_CLASS}[${EXPORT_SCOPE_ATTR}="turn"]`)
+        .forEach((button) => button.remove());
+    });
 
     turns.forEach((turn) => {
+      // Remove stale prompt controls before reusing an existing control.
+      const role = getTurnRole(turn);
+      if (role !== "assistant") {
+        turn
+          .querySelectorAll(`.${EXPORT_BUTTON_CLASS}[${EXPORT_SCOPE_ATTR}="turn"]`)
+          .forEach((button) => button.remove());
+        turn.removeAttribute("data-omni-processed");
+        return;
+      }
+
       if (turn.hasAttribute("data-omni-processed")) {
         const existingButton = turn.querySelector(`.${EXPORT_BUTTON_CLASS}`);
         if (existingButton) {
+          const referenceButton = turn.querySelector(SHARE_BUTTON_SELECTOR);
+          configureChatGptTurnExportButton(existingButton, referenceButton);
           attachOmniTooltip(existingButton, t("export"));
-          syncChatGptTurnExportButton(existingButton);
+          syncChatGptTurnExportButton(existingButton, referenceButton);
+          return;
         }
-        return;
+        // React may replace the action bar without replacing the turn root.
+        turn.removeAttribute("data-omni-processed");
       }
 
-      const role = getTurnRole(turn);
-      if (role !== "assistant") {
-        return;
-      }
-
-      const shareButton = turn.querySelector(SHARE_BUTTON_SELECTOR);
+      const shareButton = findChatGptTurnExportReference(turn);
       if (!shareButton) {
         return;
       }
       const existingButton = turn.querySelector(`.${EXPORT_BUTTON_CLASS}`);
       if (existingButton) {
+        configureChatGptTurnExportButton(existingButton, shareButton);
         attachOmniTooltip(existingButton, t("export"));
         syncChatGptTurnExportButton(existingButton, shareButton);
+        placeChatGptTurnExportButton(existingButton, shareButton);
         turn.setAttribute("data-omni-processed", "true");
         return;
       }
       const button = buildExportButton("turn");
+      configureChatGptTurnExportButton(button, shareButton);
       attachOmniTooltip(button, t("export"));
       syncChatGptTurnExportButton(button, shareButton);
-      shareButton.insertAdjacentElement("afterend", button);
+      placeChatGptTurnExportButton(button, shareButton);
       turn.setAttribute("data-omni-processed", "true");
     });
+  }
+
+  function isChatGptAssistantActionBar(actionBar, turn) {
+    if (!actionBar) {
+      return false;
+    }
+    return Boolean(turn && getTurnRole(turn) === "assistant");
+  }
+
+  function findChatGptTurnExportReference(turn) {
+    if (!turn || !turn.querySelector) {
+      return null;
+    }
+    return turn.querySelector(SHARE_BUTTON_SELECTOR);
+  }
+
+  function removeChatGptGalleryExportButtons(scope) {
+    if (!scope || !scope.querySelectorAll) {
+      return;
+    }
+    scope
+      .querySelectorAll(
+        '[data-testid="generated-image-gallery"] .' + EXPORT_BUTTON_CLASS,
+      )
+      .forEach((button) => button.remove());
+  }
+
+  function findChatGptTurnForActionBar(actionBar) {
+    if (!actionBar || !actionBar.closest) {
+      return null;
+    }
+    // Assistant action bars may be siblings of their message blocks.
+    let actionRow = actionBar;
+    for (let depth = 0; actionRow && depth < 5; depth += 1) {
+      let preceding = actionRow.previousElementSibling;
+      while (preceding) {
+        const messageCandidates = preceding.matches &&
+          preceding.matches(
+            '[data-content-search-unit-key], [data-chatgpt-search-unit-key], [data-chatgpt-search-message-ids]',
+          )
+          ? [preceding]
+          : preceding.querySelectorAll
+            ? Array.from(
+              preceding.querySelectorAll(
+                '[data-content-search-unit-key], [data-chatgpt-search-unit-key], [data-chatgpt-search-message-ids]',
+              ),
+            )
+            : [];
+        // Prefer the latest assistant block in a structural wrapper.
+        const messageUnit = messageCandidates[messageCandidates.length - 1];
+        if (messageUnit) {
+          return messageUnit;
+        }
+        // Stay within nearby transcript wrappers.
+        if (preceding.hasAttribute("data-content-search-turn-key")) {
+          break;
+        }
+        preceding = preceding.previousElementSibling;
+      }
+      actionRow = actionRow.parentElement;
+    }
+    const directTurn =
+      actionBar.closest(TURN_SELECTOR) ||
+      actionBar.closest(
+        '[data-content-search-unit-key], [data-chatgpt-search-unit-key], [data-content-search-turn-key], [data-testid^="conversation-turn"], [data-reply-scope], .group\\/message-row',
+      );
+    if (directTurn) {
+      return directTurn;
+    }
+
+    // Newer ChatGPT layouts can render action bars beside their message unit.
+    let container = actionBar.parentElement;
+    for (let depth = 0; container && depth < 5; depth += 1) {
+      const candidates = Array.from(
+        container.querySelectorAll(
+          '[data-content-search-unit-key], [data-chatgpt-search-unit-key], [data-content-search-turn-key], [data-testid^="conversation-turn"], [data-reply-scope], .group\\/message-row',
+        ),
+      ).filter((candidate) => {
+        return !candidate.closest(".turn-action-controls");
+      });
+      if (candidates.length === 1) {
+        return candidates[0];
+      }
+      container = container.parentElement;
+    }
+    return null;
+  }
+
+  function attachChatGptActionBarExportButton(actionBar) {
+    if (!actionBar || !actionBar.querySelector) {
+      return;
+    }
+    const existingButton = actionBar.querySelector(
+      `.${EXPORT_BUTTON_CLASS}[${EXPORT_SCOPE_ATTR}="turn"]`,
+    );
+    const nativeButton = Array.from(
+      actionBar.querySelectorAll("button[aria-label]"),
+    ).find((button) => !button.hasAttribute(EXPORT_SCOPE_ATTR));
+    if (!nativeButton) {
+      return;
+    }
+    if (existingButton) {
+      configureChatGptTurnExportButton(existingButton, nativeButton);
+      attachOmniTooltip(existingButton, t("export"));
+      syncChatGptTurnExportButton(existingButton, nativeButton);
+      placeChatGptTurnExportButton(existingButton, nativeButton);
+      return;
+    }
+    const button = buildExportButton("turn");
+    configureChatGptTurnExportButton(button, nativeButton);
+    attachOmniTooltip(button, t("export"));
+    syncChatGptTurnExportButton(button, nativeButton);
+    placeChatGptTurnExportButton(button, nativeButton);
+  }
+
+  function placeChatGptTurnExportButton(button, nativeButton) {
+    if (!button || !nativeButton) {
+      return;
+    }
+    const anchor =
+      nativeButton.closest(TURN_SELECTOR) ||
+      findChatGptTurnForActionBar(nativeButton.closest(".turn-action-controls"));
+    if (anchor) {
+      // Preserve the injected message root when ChatGPT renders actions beside a response.
+      button.__omniChatGptAnchorTurn = anchor;
+    }
+    // Insert beside the native tooltip trigger, not inside it.
+    const tooltipTrigger = nativeButton.closest("span.contents[data-state]");
+    const reference =
+      tooltipTrigger &&
+      tooltipTrigger.querySelectorAll("button").length === 1
+        ? tooltipTrigger
+        : nativeButton;
+    if (button.previousElementSibling !== reference) {
+      reference.insertAdjacentElement("afterend", button);
+    }
+  }
+
+  function configureChatGptTurnExportButton(button, referenceButton) {
+    if (!button || !referenceButton) {
+      return;
+    }
+    const nativeClassName = ensureString(referenceButton.className).trim();
+    if (nativeClassName) {
+      button.className = `${EXPORT_BUTTON_CLASS} omni-exporter-chatgpt-turn ${nativeClassName}`;
+    }
   }
 
   function syncChatGptTurnExportButton(button, referenceButton) {
@@ -2547,6 +3044,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       !button ||
       button.getAttribute(EXPORT_SCOPE_ATTR) !== "turn"
     ) {
+      return;
+    }
+    if (button.classList.contains("omni-exporter-chatgpt-turn")) {
+      button.querySelectorAll("svg path").forEach((path) => {
+        path.setAttribute("stroke", "currentColor");
+        path.style.removeProperty("stroke");
+      });
+      installChatGptThemeSyncObserver();
       return;
     }
     const reference = referenceButton || findChatGptTurnColorReference(button);
@@ -2856,10 +3361,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     button.style.removeProperty("margin-right");
     syncGrokExportIconSpacing(button);
     bindGrokOmniTooltip(button);
-  }
-
-  function buildGrokNativeTurnButton(referenceButton) {
-    return buildGrokNativeExportButton(referenceButton, "turn");
   }
 
   function normalizeGrokExportButtonScope(button, scope) {
@@ -3889,15 +4390,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       button.removeAttribute(GEMINI_THREAD_FALLBACK_ATTR);
       syncGeminiThreadButtonColor(button, anchor.referenceButton);
       placeGeminiThreadButton(button, anchor);
-      logGeminiThreadInjection("anchored", anchor.name);
       return;
     }
 
     removeGeminiThreadButtons("waiting-for-gemini-header-anchor");
-    logGeminiThreadInjection(
-      "skip-floating-fallback",
-      "waiting for a stable Gemini header anchor",
-    );
   }
 
   function getPrimaryGeminiThreadButton() {
@@ -3906,10 +4402,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
     if (buttons.length > 1) {
       buttons.slice(1).forEach((button) => button.remove());
-      logGeminiThreadInjection(
-        "dedupe",
-        `removed ${buttons.length - 1} duplicate thread button(s)`,
-      );
     }
     return buttons[0] || null;
   }
@@ -3922,10 +4414,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return;
     }
     buttons.forEach((button) => button.remove());
-    logGeminiThreadInjection(
-      "removed",
-      reason || "thread button is not valid here",
-    );
   }
 
   function hasActiveGeminiThreadContext() {
@@ -3950,16 +4438,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       );
     }
     return Boolean(getGeminiConversationIdFromLocation());
-  }
-
-  function hasStableGeminiThreadFallbackContext() {
-    if (getGeminiConversationIdFromLocation()) {
-      return true;
-    }
-    const main = document.querySelector("main") || document.body;
-    return Boolean(
-      main && main.querySelector("model-response, message-content"),
-    );
   }
 
   function getGeminiRouteParts() {
@@ -4226,28 +4704,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       }
     }
     return null;
-  }
-
-  function buildGeminiFloatingThreadButton() {
-    const button = buildExportButton("thread");
-    button.setAttribute("aria-label", t("exportConversation"));
-    button.setAttribute(GEMINI_THREAD_EXPORT_ATTR, "true");
-    button.setAttribute(GEMINI_THREAD_FALLBACK_ATTR, "true");
-    button.classList.add("omni-exporter-gemini-floating");
-    return button;
-  }
-
-  function getGeminiThreadFallbackHost() {
-    return document.body || document.documentElement || null;
-  }
-
-  function logGeminiThreadInjection(state, detail) {
-    const key = `${state}:${detail || ""}`;
-    if (lastGeminiThreadInjectionLogKey === key) {
-      return;
-    }
-    lastGeminiThreadInjectionLogKey = key;
-    console.info(`OmniChat Gemini thread export: ${state}`, detail || "");
   }
 
   function isStaleGeminiNativeThreadButton(button) {
@@ -4712,7 +5168,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       button.className = GROK_THREAD_EXPORT_CLASS;
     }
     if (!isGrokThreadIconMarkupCurrent(button)) {
-      button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon("20")}</span>`;
+      button.innerHTML = `<span style="opacity: 1; transform: none;">${buildExportIcon("18")}</span>`;
     }
     if (button.style.getPropertyValue("margin-bottom") !== "0px") {
       button.style.setProperty("margin-bottom", "0", "important");
@@ -4741,8 +5197,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       span.tagName &&
       span.tagName.toLowerCase() === "span" &&
       svg &&
-      svg.getAttribute("width") === "20" &&
-      svg.getAttribute("height") === "20",
+      svg.getAttribute("width") === "18" &&
+      svg.getAttribute("height") === "18",
     );
   }
 
@@ -4753,6 +5209,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     const portal = document.createElement("div");
     portal.id = "tooltip-portal";
+    portal.className = "relative z-[300]";
     document.body.appendChild(portal);
     return portal;
   }
@@ -4781,7 +5238,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     content.setAttribute("data-align", "center");
     content.setAttribute("data-state", "delayed-open");
     content.className =
-      "overflow-hidden rounded-lg bg-popover shadow-sm dark:shadow-none px-3 py-1.5 border border-border-l1 text-xs text-fg-primary pointer-events-none max-w-80 text-wrap animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2";
+      "overflow-hidden rounded-lg bg-surface-elevated px-2.5 py-1.5 border-0 text-xs leading-4 tracking-[-0.2px] text-fg-primary pointer-events-none max-w-80 text-wrap shadow-[inset_0_0_0_0.5px_var(--border-l2),0_1px_2px_0_rgb(0_0_0/0.07),0_2px_4px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_0_0_0.5px_var(--border-l1),0_1px_2px_0_rgb(0_0_0/0.3),0_2px_5px_-2px_rgb(0_0_0/0.25)] animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2";
     content.style.setProperty(
       "--radix-tooltip-content-transform-origin",
       "var(--radix-popper-transform-origin)",
@@ -5432,7 +5889,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       "omni-exporter-btn cds-reset group/btn relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap select-none " +
       "cursor-[var(--cds-cursor-interactive)] aria-disabled:cursor-default data-[disabled]:cursor-default border-0 outline-none rounded h-control " +
       "font-sans text-body font-medium [&:disabled:not([aria-busy])]:opacity-50 disabled:pointer-events-none transition-shadow duration-fast " +
-      "focus-visible:shadow-focus text-primary aria-pressed:text-accent aspect-square w-control px-0"
+      "focus-visible:shadow-focus text-primary aria-pressed:text-accent aspect-square w-control px-0 mx-1"
     );
   }
 
@@ -5452,15 +5909,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     setExportIconStrokeWidth(button, "1.5");
     resetClaudeThreadExportButtonColor(button);
-    attachClaudeThreadTooltip(button);
-  }
-
-  function attachClaudeThreadTooltip(button) {
-    if (!button || button.hasAttribute(CLAUDE_TOOLTIP_BOUND_ATTR)) {
-      return;
-    }
-    button.setAttribute(CLAUDE_TOOLTIP_BOUND_ATTR, "true");
-    attachClaudeTooltip(button, button, t("export"));
+    // Header controls rely on their accessible label instead of a tooltip.
+    button.removeAttribute("aria-describedby");
   }
 
   function resetClaudeThreadExportButtonColor(button) {
@@ -5493,6 +5943,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       );
       if (existingButton) {
         configureClaudeTurnExportButton(existingButton);
+        placeClaudeTurnExportButton(existingButton, container);
         return;
       }
       const messageNode = findClaudeMessageForActions(container);
@@ -5503,10 +5954,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       if (!messageNode || isUserContext) {
         return;
       }
-      const copyButton =
-        container.querySelector(CLAUDE_COPY_SELECTOR) ||
-        container.querySelector("button:last-of-type") ||
-        container.querySelector("button");
+      const copyButton = container.querySelector(CLAUDE_COPY_SELECTOR);
       if (!copyButton) {
         return;
       }
@@ -5519,15 +5967,32 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       const wrapper = document.createElement("div");
       wrapper.className = "w-fit";
       wrapper.setAttribute("data-state", "closed");
+      wrapper.setAttribute("data-omni-claude-turn-host", "true");
       attachClaudeTooltip(wrapper, button, t("export"));
       wrapper.appendChild(button);
-      const parentWrapper = copyButton.closest(".w-fit");
-      if (parentWrapper) {
-        parentWrapper.insertAdjacentElement("afterend", wrapper);
-      } else {
-        copyButton.insertAdjacentElement("afterend", wrapper);
-      }
+      placeClaudeTurnExportButton(button, container);
     });
+  }
+
+  function placeClaudeTurnExportButton(button, container) {
+    if (!button || !container) {
+      return;
+    }
+    const copyButton = container.querySelector(CLAUDE_COPY_SELECTOR);
+    if (!copyButton || copyButton === button) {
+      return;
+    }
+    const host =
+      button.closest("[data-omni-claude-turn-host]") ||
+      button.closest(".w-fit") ||
+      button;
+    const copyHost = copyButton.closest(".w-fit") || copyButton;
+    if (
+      host.parentElement !== copyHost.parentElement ||
+      host !== copyHost.nextElementSibling
+    ) {
+      copyHost.insertAdjacentElement("afterend", host);
+    }
   }
 
   function getClaudeTurnExportButtonClass() {
@@ -5545,6 +6010,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     button.className = getClaudeTurnExportButtonClass();
     button.setAttribute("data-cds", "Button");
+    button.setAttribute("data-cds-icon-only", "");
+    button.setAttribute("data-cds-ghost", "");
     button.setAttribute("data-size", "xs");
     button.setAttribute("tabindex", "-1");
     button.setAttribute(CLAUDE_TURN_EXPORT_ATTR, "true");
@@ -5990,16 +6457,18 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     tooltip.setAttribute("data-base-ui-focusable", "");
     tooltip.setAttribute("role", "tooltip");
     tooltip.className =
-      "px-2 rounded-[6px] bg-[var(--cds-tooltip-bg)] text-[var(--cds-tooltip-fg)] shadow-sm dark:shadow-panel-sm text-[13px]/[18px] origin-[var(--transform-origin)] transition-[opacity,scale] duration-snap ease-snap motion-reduce:transition-none data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[instant]:duration-0 inline-flex items-center whitespace-nowrap gap-2 h-6";
+      "px-2 rounded-[calc(0.375rem*var(--cds-rem-scale,1))] bg-[var(--cds-tooltip-bg)] text-[var(--cds-tooltip-fg)] shadow-sm dark:shadow-panel-sm print:hidden text-[calc(0.8125rem*var(--cds-rem-scale,1))]/[calc(1.125rem*var(--cds-rem-scale,1))] font-normal origin-[var(--transform-origin)] transition-[opacity,scale] duration-snap ease-snap motion-reduce:transition-none data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[instant]:duration-0 inline-flex items-center gap-2 min-h-[calc(1.5rem*var(--cds-rem-scale,1))] max-w-[240px] py-[calc(0.1875rem*var(--cds-rem-scale,1))] text-balance";
 
     const contentRoot = document.createElement("div");
-    contentRoot.className = "cds-root contents";
-    contentRoot.setAttribute("data-mode", mode);
+    contentRoot.className = "cds-dark-scope contents";
+    // Match Claude's dark tooltip scope on every page theme.
+    contentRoot.setAttribute("data-mode", "dark");
     contentRoot.setAttribute("data-density", "comfortable");
     contentRoot.setAttribute("data-platform", "web");
     contentRoot.setAttribute("data-font", "anthropic");
 
     const text = document.createElement("span");
+    text.className = "min-w-0 break-words";
     text.textContent = label;
     contentRoot.appendChild(text);
     tooltip.appendChild(contentRoot);
@@ -6081,16 +6550,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         rect.left + rect.width / 2 - width / 2,
       ),
     );
-    const isThreadTooltip =
-      button.hasAttribute && button.hasAttribute(CLAUDE_THREAD_EXPORT_ATTR);
-    const top = isThreadTooltip
-      ? Math.min(window.innerHeight - height - padding, rect.bottom + 4)
+    // Flip the tooltip below its trigger when there is no room above.
+    const shouldPlaceBelow = rect.top - height - 5.4 < padding;
+    const top = shouldPlaceBelow
+      ? Math.min(window.innerHeight - height - padding, rect.bottom + 5.4)
       : Math.max(padding, rect.top - height - 5.4);
     const originX = Math.max(
       0,
       Math.min(width, rect.left + rect.width / 2 - left),
     );
-    const side = isThreadTooltip ? "bottom" : "top";
+    const side = shouldPlaceBelow ? "bottom" : "top";
 
     popperWrapper.setAttribute("data-side", side);
     tooltip.setAttribute("data-side", side);
@@ -6100,7 +6569,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
     popperWrapper.style.setProperty(
       "--available-height",
-      `${Math.max(0, (isThreadTooltip ? window.innerHeight - rect.bottom : rect.top) - padding)}px`,
+      `${Math.max(0, (shouldPlaceBelow ? window.innerHeight - rect.bottom : rect.top) - padding)}px`,
     );
     popperWrapper.style.setProperty(
       "--anchor-width",
@@ -6112,7 +6581,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
     popperWrapper.style.setProperty(
       "--transform-origin",
-      isThreadTooltip ? `${originX}px -4px` : `${originX}px calc(100% + 4px)`,
+      shouldPlaceBelow ? `${originX}px -4px` : `${originX}px calc(100% + 4px)`,
     );
     popperWrapper.style.transform = `translate(${left}px, ${Math.max(padding, top)}px)`;
   }
@@ -6360,22 +6829,20 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
     if (existingButton) {
       if (platform === "chatgpt") {
+        configureChatGptHeaderExportButton(existingButton);
+        attachOmniTooltip(existingButton, t("export"));
         setExportIconStrokeWidth(existingButton, "1.6");
         placeChatGptHeaderExportButton(existingButton, headerActions);
       }
       return;
     }
-    const shareButton = headerActions.querySelector(
-      '[data-testid="share-chat-button"]',
-    );
+    const shareButton = findChatGptHeaderActionAnchor(headerActions);
     const button = buildExportButton("thread");
     button.setAttribute(HEADER_EXPORT_ATTR, "true");
 
     if (platform === "chatgpt") {
-      button.className =
-        "text-token-text-primary no-draggable hover:bg-token-surface-hover keyboard-focused:bg-token-surface-hover " +
-        "touch:h-10 touch:w-10 flex h-9 w-9 items-center justify-center rounded-lg " +
-        "focus:outline-none disabled:opacity-50";
+      configureChatGptHeaderExportButton(button);
+      attachOmniTooltip(button, t("export"));
       setExportIconStrokeWidth(button, "1.6");
     }
 
@@ -6396,15 +6863,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!button || !headerActions) {
       return;
     }
+    const buttonHost = ensureChatGptHeaderExportHost(button);
     const shareButton =
       knownShareButton ||
-      headerActions.querySelector('[data-testid="share-chat-button"]');
+      findChatGptHeaderActionAnchor(headerActions);
     if (!shareButton) {
       if (
-        button.parentElement !== headerActions ||
-        button !== headerActions.firstElementChild
+        buttonHost.parentElement !== headerActions ||
+        buttonHost !== headerActions.firstElementChild
       ) {
-        headerActions.insertAdjacentElement("afterbegin", button);
+        headerActions.insertAdjacentElement("afterbegin", buttonHost);
       }
       return;
     }
@@ -6417,15 +6885,73 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       shareGroup = shareGroup.parentElement;
     }
     if (shareGroup.parentElement !== headerActions) {
-      shareButton.insertAdjacentElement("beforebegin", button);
+      shareButton.insertAdjacentElement("beforebegin", buttonHost);
       return;
     }
     if (
-      button.parentElement !== headerActions ||
-      button.nextElementSibling !== shareGroup
+      buttonHost.parentElement !== headerActions ||
+      buttonHost.nextElementSibling !== shareGroup
     ) {
-      shareGroup.insertAdjacentElement("beforebegin", button);
+      shareGroup.insertAdjacentElement("beforebegin", buttonHost);
     }
+  }
+
+  function ensureChatGptHeaderExportHost(button) {
+    const existingHost = button.closest(
+      "[data-omni-chatgpt-header-export-host]",
+    );
+    if (existingHost) {
+      ensureChatGptHeaderExportSurface(existingHost, button);
+      return existingHost;
+    }
+    const host = document.createElement("div");
+    host.className = "pointer-events-auto flex shrink-0 items-center no-drag";
+    host.setAttribute("data-omni-chatgpt-header-export-host", "true");
+    host.style.setProperty("pointer-events", "auto", "important");
+    ensureChatGptHeaderExportSurface(host, button);
+    return host;
+  }
+
+  function ensureChatGptHeaderExportSurface(host, button) {
+    if (!host || !button) {
+      return;
+    }
+    let surface = host.querySelector(
+      "[data-omni-chatgpt-header-export-surface]",
+    );
+    if (!surface) {
+      surface = document.createElement("div");
+      surface.setAttribute("data-omni-chatgpt-header-export-surface", "true");
+      host.appendChild(surface);
+    }
+    surface.className =
+      "flex items-center gap-toolbar-action browser:rounded-lg browser:bg-surface";
+    if (button.parentElement !== surface) {
+      surface.appendChild(button);
+    }
+  }
+
+  function configureChatGptHeaderExportButton(button) {
+    if (!button) {
+      return;
+    }
+    button.className =
+      "no-drag cursor-interaction items-center select-none disabled:cursor-default aria-disabled:cursor-default " +
+      "focus:outline-hidden disabled:opacity-40 aria-disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring " +
+      "focus-visible:ring-offset-0 whitespace-nowrap flex border gap-1 rounded-lg text-(--color-text-toolbar-action) " +
+      "not-disabled:not-aria-disabled:hover:bg-primary-ghost-hover data-[state=open]:bg-primary-ghost-hover border-transparent " +
+      "button-toolbar py-0 text-sm leading-[18px] aspect-square shrink-0 items-center justify-center !px-0";
+  }
+
+  function findChatGptHeaderActionAnchor(headerActions) {
+    if (!headerActions || !headerActions.querySelector) {
+      return null;
+    }
+    return (
+      headerActions.querySelector('[data-testid="share-chat-button"]') ||
+      headerActions.querySelector("button[aria-label]") ||
+      null
+    );
   }
 
   function setExportIconStrokeWidth(button, width) {
@@ -6533,9 +7059,25 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function bindExportButtonEvents(button, tagName) {
+    if (platform === "chatgpt") {
+      button.addEventListener("pointerdown", (event) => {
+        // Handle the initial press to avoid React toggling the menu twice.
+        event.preventDefault();
+        event.stopPropagation();
+        button.dataset.omniExportPointerDownAt = String(Date.now());
+        toggleMenu(button);
+      });
+    }
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (platform === "chatgpt") {
+        const pressedAt = Number(button.dataset.omniExportPointerDownAt) || 0;
+        delete button.dataset.omniExportPointerDownAt;
+        if (Date.now() - pressedAt < 900) {
+          return;
+        }
+      }
       toggleMenu(button);
     });
     if (tagName !== "button") {
@@ -6545,19 +7087,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
           button.click();
         }
       });
-    }
-  }
-
-  function syncButtonSize(button, reference) {
-    if (!reference) {
-      return;
-    }
-    const rect = reference.getBoundingClientRect();
-    if (rect.width) {
-      button.style.width = `${rect.width}px`;
-    }
-    if (rect.height) {
-      button.style.height = `${rect.height}px`;
     }
   }
 
@@ -6707,6 +7236,38 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
   }
 
+  function createExportFormatIcon(format) {
+    const pathsByFormat = {
+      pdf: [
+        "M7 2.5h7.5l5 5V19a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 19V5A2.5 2.5 0 0 1 7 2.5z",
+        "M14.5 2.5V6a1.5 1.5 0 0 0 1.5 1.5h3.5",
+        "M8.5 12h4",
+        "M8.5 16.5c1-1.6 2-1.6 3 0s2 1.6 3 0",
+      ],
+      md: ["M3 17V7l4.5 5L12 7v10", "M18 7v10", "M14.8 13.8L18 17l3.2-3.2"],
+      txt: ["M4 7h16", "M4 12h16", "M4 17h10"],
+      json: [
+        "M9 4H8a3 3 0 0 0-3 3v2.5A2.5 2.5 0 0 1 2.5 12 2.5 2.5 0 0 1 5 14.5V17a3 3 0 0 0 3 3h1",
+        "M15 4h1a3 3 0 0 1 3 3v2.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0-2.5 2.5V17a3 3 0 0 1-3 3h-1",
+      ],
+    };
+    const icon = document.createElement("span");
+    icon.className = "omni-exporter-format-icon";
+    icon.setAttribute("aria-hidden", "true");
+
+    // Build SVG nodes directly because Gemini enforces Trusted Types.
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("focusable", "false");
+    for (const pathData of pathsByFormat[format] || pathsByFormat.txt) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", pathData);
+      svg.appendChild(path);
+    }
+    icon.appendChild(svg);
+    return icon;
+  }
+
   function appendMenuItemsDOM(menu) {
     const formats = [
       { value: "pdf", label: "PDF" },
@@ -6734,7 +7295,12 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         t("exportAs", { format: format.label }),
       );
 
-      button.textContent = format.label;
+      const icon = createExportFormatIcon(format.value);
+
+      const label = document.createElement("span");
+      label.className = "omni-exporter-format-label";
+      label.textContent = format.label;
+      button.append(icon, label);
       grid.appendChild(button);
     });
     menu.appendChild(grid);
@@ -6904,7 +7470,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     updatePdfExportLoader({
       stage: t("exportCancelled"),
-      detail: "Stopping collection and restoring the scroll position...",
+      detail: "",
       progress: 0,
       progressText: "",
       indeterminate: false,
@@ -6967,6 +7533,40 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  async function waitForExportContentToSettle(session) {
+    const deadline = Date.now() + EXPORT_RENDER_SETTLE_TIMEOUT_MS;
+    while (hasPendingExportContent()) {
+      throwIfExportCancelled(session);
+      if (Date.now() >= deadline) {
+        return;
+      }
+      await waitForExportDelay(EXPORT_RENDER_SETTLE_POLL_MS, session);
+    }
+  }
+
+  function hasPendingExportContent() {
+    return Array.from(
+      document.querySelectorAll(
+        '[aria-busy="true"], [data-loading="true"], [data-state="loading"], .md-code-block, [data-mermaid], [class*="VisualizationBlock"]',
+      ),
+    ).some((node) => {
+      const isBusyVisualization =
+        node.getAttribute("aria-busy") === "true" &&
+        (node.matches(
+          ".md-code-block, [data-mermaid], [class*='VisualizationBlock']",
+        ) ||
+          !!node.closest(
+            ".md-code-block, [data-mermaid], [class*='VisualizationBlock']",
+          ));
+      return (
+        isBusyVisualization ||
+        node.getAttribute("aria-busy") === "true" ||
+        node.getAttribute("data-loading") === "true" ||
+        node.getAttribute("data-state") === "loading"
+      );
+    });
+  }
+
   async function handleExportFormat(format, button, selectedOptions) {
     const scope = button.getAttribute(EXPORT_SCOPE_ATTR) || "turn";
     const isPdfExport = format === "pdf";
@@ -7004,13 +7604,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   async function showInitialExportLoader(isPdfExport) {
-    showPdfExportLoader({
-      stage: "Loading the full conversation...",
-      detail: "Scanning messages before export.",
-      progress: 0.06,
-      progressText: isPdfExport ? "Step 1 of 5" : "Loading messages",
-      indeterminate: false,
-    });
+    showPdfExportLoader(
+      createPdfLoaderState(1, 0.06, {
+        progressText: isPdfExport ? true : false,
+      }),
+    );
     await waitForNextPaint();
   }
 
@@ -7041,13 +7639,27 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   async function collectExportMessages(scope, anchorTurn, session) {
+    await waitForExportContentToSettle(session);
     let turns = [];
     let messages = [];
     if (scope === "thread") {
-      messages = await collectThreadMessagesFromVirtualScroll(session);
       turns = getAllTurns();
-      if (!messages.length) {
-        messages = collectMessagesFromTurns(turns);
+      if (platform === "chatgpt") {
+        // Scan ChatGPT's virtualized scroll surface and restore its position.
+        messages = await collectThreadMessagesFromVirtualScroll(session);
+        turns = getAllTurns();
+        // Prefer rendered DOM to preserve rich content and message order.
+        if (!messages.length) {
+          const apiMessages = await getChatGptConversationMessages();
+          if (apiMessages.length) {
+            messages = apiMessages;
+          }
+        }
+      } else {
+        messages = await collectThreadMessagesFromVirtualScroll(session);
+        if (!messages.length) {
+          messages = collectMessagesFromTurns(turns);
+        }
       }
     } else {
       turns = scope === "thread" ? getAllTurns() : getRelatedTurns(anchorTurn);
@@ -7057,7 +7669,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (
       platform === "chatgpt" &&
       scope === "thread" &&
-      !messagesHaveExportableImages(messages)
+      !messages.length
     ) {
       const apiMessages = await getChatGptConversationMessages();
       if (apiMessages && apiMessages.length) {
@@ -7095,7 +7707,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       format,
       context.scope === "thread" ? null : context.anchorTurn,
     );
-    const payload = buildExportPayload(format, messages, options);
+    const portableMessages = await inlineBlobImagesForPortableExport(
+      messages,
+      session,
+    );
+    const payload = buildExportPayload(format, portableMessages, options);
     throwIfExportCancelled(session);
     downloadText(payload.content, filename, payload.mimeType);
     flashButton(button, t("exportOk"), "success");
@@ -7146,7 +7762,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function findAnchorTurn(button) {
     if (platform === "chatgpt") {
-      return button.closest(TURN_SELECTOR);
+      return (
+        (button.__omniChatGptAnchorTurn &&
+        button.__omniChatGptAnchorTurn.isConnected
+          ? button.__omniChatGptAnchorTurn
+          : null) ||
+        button.closest(TURN_SELECTOR) ||
+        findChatGptTurnForActionBar(button.closest(".turn-action-controls")) ||
+        button.closest("[data-content-search-turn-key]") ||
+        button.closest('[data-reply-scope], .group\\/message-row')
+      );
     }
     if (platform === "grok") {
       return findGrokAnchor(button);
@@ -7183,7 +7808,66 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function getConversationTurns() {
-    return Array.from(document.querySelectorAll(TURN_SELECTOR));
+    // Limit ChatGPT exports to the active transcript to avoid stale route fragments.
+    const root =
+      platform === "chatgpt" ? getChatGptActiveConversationRoot() : document;
+    if (!root || !root.querySelectorAll) {
+      return [];
+    }
+
+    // Prefer one root per visible ChatGPT turn; image replies use a fallback.
+    const units = Array.from(
+      root.querySelectorAll(
+        "[data-content-search-unit-key], [data-chatgpt-search-unit-key]",
+      ),
+    );
+    // Image-only replies use the surrounding assistant block for prompt pairing.
+    const assistantBlocks = Array.from(
+      root.querySelectorAll('[data-conversation-role="assistant"]'),
+    )
+      .map((label) => label.closest(".block-BQZwFn"))
+      .filter(Boolean);
+    const candidates = units.concat(
+      assistantBlocks.filter(
+        (block) =>
+          !units.some(
+            (unit) => unit === block || unit.contains(block) || block.contains(unit),
+          ),
+      ),
+    );
+    if (candidates.length) {
+      return candidates.sort((a, b) => {
+        if (a === b) return 0;
+        const position = a.compareDocumentPosition(b);
+        return position & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+      });
+    }
+    return Array.from(root.querySelectorAll(TURN_SELECTOR));
+  }
+
+  function getChatGptActiveConversationRoot() {
+    const mains = Array.from(document.querySelectorAll("main"));
+    if (!mains.length) {
+      return document.body;
+    }
+    // Prefer the visible main with the most conversation units.
+    return mains
+      .map((main, index) => {
+        const turnCount = main.querySelectorAll(TURN_SELECTOR).length;
+        const isHidden =
+          main.closest('[aria-hidden="true"], [hidden]') !== null ||
+          (main.getClientRects && main.getClientRects().length === 0);
+        return { main, index, turnCount, isHidden };
+      })
+      .sort((a, b) => {
+        if (a.isHidden !== b.isHidden) {
+          return a.isHidden ? 1 : -1;
+        }
+        if (a.turnCount !== b.turnCount) {
+          return b.turnCount - a.turnCount;
+        }
+        return a.index - b.index;
+      })[0].main;
   }
 
   function getTurnRole(turn) {
@@ -7249,6 +7933,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function resolveIndexedAnchorTurn(anchorTurn, turns) {
     let anchor = anchorTurn;
     let index = turns.indexOf(anchorTurn);
+    if (index === -1 && platform === "chatgpt") {
+      const chatGptTurn = resolveChatGptIndexedTurn(anchorTurn, turns);
+      if (chatGptTurn) {
+        anchor = chatGptTurn;
+        index = turns.indexOf(chatGptTurn);
+      }
+    }
     if (index === -1 && platform === "deepseek") {
       const deepSeekTurn = resolveDeepSeekTurn(anchorTurn);
       if (deepSeekTurn) {
@@ -7257,6 +7948,37 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       }
     }
     return { anchor, index };
+  }
+
+  function resolveChatGptIndexedTurn(anchorTurn, turns) {
+    if (!anchorTurn || !Array.isArray(turns) || !turns.length) {
+      return null;
+    }
+    // Resolve image galleries to their transcript unit for prompt pairing.
+    const unit = anchorTurn.closest
+      ? anchorTurn.closest(
+        "[data-content-search-unit-key], [data-chatgpt-search-unit-key]",
+      )
+      : null;
+    if (unit && turns.includes(unit)) {
+      return unit;
+    }
+    const containingTurn = turns.find(
+      (turn) => turn && turn.contains && turn.contains(anchorTurn),
+    );
+    if (containingTurn) {
+      return containingTurn;
+    }
+    // Prefer a contained assistant unit over a preceding prompt.
+    const anchorRole = inferRoleFromRoot(anchorTurn);
+    const childTurn = turns.find(
+      (turn) =>
+        turn &&
+        anchorTurn.contains &&
+        anchorTurn.contains(turn) &&
+        (!anchorRole || getTurnRole(turn) === anchorRole),
+    );
+    return childTurn || null;
   }
 
   function getAssistantRelatedTurns(turns, index, anchor) {
@@ -7415,7 +8137,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       const contentNodes = filterTopLevelNodes(
         Array.from(
           scope.querySelectorAll(
-            ".markdown, [data-message-content], .prose, .whitespace-pre-wrap",
+            ".markdown, [data-message-content], .prose, .whitespace-pre-wrap, " +
+              '[data-markdown-text-style="assistant-message"], .MarkdownRoot-rZKhxa, ' +
+              "[data-markdown-copy], [data-markdown-copy-text]",
           ),
         ),
       );
@@ -7450,7 +8174,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return messages;
     }
 
-    const fallback = collectChatGptMessagesFromDocument();
+    // Keep recovery inside the active transcript to avoid merging chats.
+    const fallback = collectChatGptMessagesFromDocument(
+      getChatGptActiveConversationRoot(),
+    );
     if (fallback.length) {
       return fallback;
     }
@@ -7564,14 +8291,18 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return { text: normalizeText(raw), html: raw };
   }
 
-  function collectChatGptMessagesFromDocument() {
-    const container = document.querySelector("main") || document.body;
+  function collectChatGptMessagesFromDocument(root) {
+    const container = root || getChatGptActiveConversationRoot();
     if (!container || !container.querySelectorAll) {
       return [];
     }
     const messages = [];
     const roleNodes = filterTopLevelNodes(
-      Array.from(container.querySelectorAll("[data-message-author-role]")),
+      Array.from(
+        container.querySelectorAll(
+          "[data-message-author-role], [data-content-search-unit-key], [data-chatgpt-search-unit-key], [data-chatgpt-search-message-ids]",
+        ),
+      ),
     );
     if (!roleNodes.length) {
       return [];
@@ -7618,15 +8349,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return nodeHasExportableImages(content.sourceNode);
   }
 
-  function messagesHaveExportableImages(messages) {
-    return (messages || []).some((message) => {
-      return (
-        htmlHasExportableImages(message && message.html) ||
-        nodeHasExportableImages(message && message.sourceNode)
-      );
-    });
-  }
-
   function htmlHasExportableImages(html) {
     return /<img\b/i.test(ensureString(html));
   }
@@ -7670,7 +8392,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!element || typeof element.closest !== "function") {
       return null;
     }
-    const actionBar = element.closest("[data-message-action-bar]");
+    const actionBar = element.closest(CLAUDE_ACTIONS_SELECTOR);
     if (actionBar) {
       return actionBar;
     }
@@ -7682,7 +8404,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return null;
     }
     return (
-      copyButton.closest("[data-message-action-bar]") ||
+      copyButton.closest(CLAUDE_ACTIONS_SELECTOR) ||
       copyButton.closest('[role="toolbar"], [role="group"]') ||
       copyButton.parentElement ||
       null
@@ -7719,6 +8441,25 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function getClaudeMessageRoots() {
     const container = document.querySelector("main") || document.body;
+    // Transcript rows preserve Claude's virtualized conversation order.
+    const transcriptRoots = [];
+    const transcriptSeen = new Set();
+    container
+      .querySelectorAll('[data-testid="transcript-row"]')
+      .forEach((row) => {
+        const message = row.querySelector(
+          '[data-testid="user-message"], [data-testid="assistant-message"]',
+        );
+        if (message && !transcriptSeen.has(message)) {
+          transcriptSeen.add(message);
+          transcriptRoots.push(message);
+        }
+      });
+    if (transcriptRoots.length) {
+      return sortClaudeTranscriptRoots(transcriptRoots);
+    }
+
+    // Fallback for older Claude layouts without transcript rows.
     const selectors = [
       '[data-testid="assistant-message"]',
       '[data-testid="user-message"]',
@@ -7752,16 +8493,61 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return roots;
   }
 
+  function sortClaudeTranscriptRoots(roots) {
+    return roots.slice().sort((a, b) => {
+      const aIndex = getClaudeTranscriptIndex(a);
+      const bIndex = getClaudeTranscriptIndex(b);
+      if (Number.isFinite(aIndex) && Number.isFinite(bIndex)) {
+        return aIndex - bIndex;
+      }
+      if (Number.isFinite(aIndex)) {
+        return -1;
+      }
+      if (Number.isFinite(bIndex)) {
+        return 1;
+      }
+      return compareDocumentOrder(a, b);
+    });
+  }
+
+  function getClaudeTranscriptIndex(node) {
+    const row =
+      node && node.closest
+        ? node.closest('[data-testid="transcript-row"]')
+        : null;
+    const value = ensureString(
+      row && (row.getAttribute("data-index") || row.getAttribute("data-rs-index")),
+    ).trim();
+    const index = Number.parseInt(value, 10);
+    return Number.isFinite(index) ? index : Number.NaN;
+  }
+
+  function compareDocumentOrder(a, b) {
+    if (a === b) {
+      return 0;
+    }
+    const position = a.compareDocumentPosition(b);
+    if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+      return -1;
+    }
+    if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+      return 1;
+    }
+    return 0;
+  }
+
   function findClaudeMessageForActions(actions) {
-    const article = actions.closest("article");
-    if (article) {
-      const assistantInArticle = article.querySelector(
+    const messageArticle = actions.closest(
+      'article, [role="article"], [data-testid="transcript-row"]',
+    );
+    if (messageArticle) {
+      const assistantInArticle = messageArticle.querySelector(
         '.font-claude-response, [data-testid="assistant-message"]',
       );
       if (assistantInArticle) {
         return assistantInArticle;
       }
-      const userInArticle = article.querySelector(
+      const userInArticle = messageArticle.querySelector(
         '[data-testid="user-message"]',
       );
       if (userInArticle) {
@@ -8085,7 +8871,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   async function collectThreadMessagesFromVirtualScroll(session) {
     const scroller = findConversationScroller();
     if (!scroller) {
-      console.info(
+      console.debug(
         "OmniChat thread export: no scroll container found, using visible DOM only",
       );
       return collectMessagesFromTurns(getAllTurns());
@@ -8117,54 +8903,60 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     };
 
     try {
-      console.info(`OmniChat ${platform} thread export: scanning full chat`);
-      updatePdfExportLoader({
-        stage: "Loading the full conversation...",
-        detail: "Moving to the oldest available messages.",
-        progress: 0.08,
-        progressText: "Scanning conversation",
-        indeterminate: true,
-      });
+      console.debug(`OmniChat ${platform} thread export: scanning full chat`);
+      updatePdfExportLoader(
+        createPdfLoaderState(1, 0.08, { indeterminate: true }),
+      );
       await scrollConversationScrollerToStableTop(
         scroller,
         captureVisibleMessages,
         session,
       );
 
-      // The upward loading passes may prepend older batches. Rebuild the
-      // collection from the stable top so the exported order stays correct.
+      // Rebuild after upward loading to keep the message order stable.
       collected.length = 0;
       seen.clear();
       captureVisibleMessages();
 
       let lastTop = -1;
       let stablePasses = 0;
+      let bottomStablePasses = 0;
       const viewportHeight = getScrollClientHeight(scroller);
       const step = Math.max(
         320,
         Math.floor(viewportHeight * THREAD_SCROLL_STEP_MULTIPLIER),
       );
-      const maxPasses = Math.min(
-        THREAD_SCROLL_MAX_PASSES,
-        Math.max(
-          10,
-          Math.ceil(getScrollMaxTop(scroller) / Math.max(1, step)) + 8,
-        ),
-      );
+      // Use a fixed pass limit because virtual transcripts can grow while scanning.
+      const maxPasses = THREAD_SCROLL_MAX_PASSES;
       for (let pass = 0; pass < maxPasses; pass += 1) {
         throwIfExportCancelled(session);
         const added = captureVisibleMessages();
         const currentTop = getScrollTop(scroller);
         const maxTop = getScrollMaxTop(scroller);
-        updatePdfExportLoader({
-          stage: "Collecting every message...",
-          detail: `${collected.length} message(s) captured`,
-          progress: maxTop > 0 ? 0.08 + (currentTop / maxTop) * 0.12 : 0.2,
-          progressText: "Scanning conversation",
-          indeterminate: false,
-        });
+        updatePdfExportLoader(
+          createPdfLoaderState(
+            1,
+            maxTop > 0 ? 0.08 + (currentTop / maxTop) * 0.12 : 0.2,
+          ),
+        );
         if (currentTop >= maxTop - 4) {
-          break;
+          // Wait for newly mounted virtual batches before declaring completion.
+          await waitForConversationScrollSettle(scroller, {
+            delay: platform === "chatgpt" ? 180 : THREAD_SCROLL_SETTLE_MS,
+            queueScan: false,
+            session,
+          });
+          const nextMaxTop = getScrollMaxTop(scroller);
+          const afterBottomAdded = captureVisibleMessages();
+          if (nextMaxTop > maxTop + 4 || afterBottomAdded > 0) {
+            bottomStablePasses = 0;
+            continue;
+          }
+          bottomStablePasses += 1;
+          if (bottomStablePasses >= (platform === "chatgpt" ? 3 : 1)) {
+            break;
+          }
+          continue;
         }
         if (Math.abs(currentTop - lastTop) < 2 && added === 0) {
           stablePasses += 1;
@@ -8183,10 +8975,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         });
       }
       captureVisibleMessages();
-      console.info(
+      console.debug(
         `OmniChat ${platform} thread export: collected ${collected.length} message(s)`,
       );
-      return collected;
+      return sortCollectedThreadMessages(collected);
     } finally {
       setScrollTop(scroller, originalTop);
       if (scroller.style) {
@@ -8198,6 +8990,30 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         session: null,
       });
     }
+  }
+
+  function sortCollectedThreadMessages(messages) {
+    if (platform !== "claude") {
+      return messages;
+    }
+    return messages
+      .map((message, captureIndex) => ({
+        message,
+        captureIndex,
+        transcriptIndex: getClaudeTranscriptIndex(message && message.sourceNode),
+      }))
+      .sort((a, b) => {
+        const aKnown = Number.isFinite(a.transcriptIndex);
+        const bKnown = Number.isFinite(b.transcriptIndex);
+        if (aKnown && bKnown && a.transcriptIndex !== b.transcriptIndex) {
+          return a.transcriptIndex - b.transcriptIndex;
+        }
+        if (aKnown !== bKnown) {
+          return aKnown ? -1 : 1;
+        }
+        return a.captureIndex - b.captureIndex;
+      })
+      .map(({ message }) => message);
   }
 
   function findConversationScroller() {
@@ -8213,6 +9029,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     addCandidate(document.scrollingElement || document.documentElement);
     const scopedSelectors = [
       "main",
+      "[data-content-search-turn-key]",
       '[class*="chat"]',
       '[class*="conversation"]',
       '[class*="scroll"]',
@@ -8225,7 +9042,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
     messageRoots.forEach((root) => {
       let current = root && root.parentElement;
-      for (let depth = 0; current && depth < 8; depth += 1) {
+      const maxAncestorDepth = platform === "chatgpt" ? 20 : 8;
+      for (let depth = 0; current && depth < maxAncestorDepth; depth += 1) {
         addCandidate(current);
         current = current.parentElement;
       }
@@ -8264,11 +9082,21 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   ) {
     let lastMaxTop = -1;
     let stableTopPasses = 0;
-    for (let pass = 0; pass < THREAD_SCROLL_TOP_MAX_PASSES; pass += 1) {
+    const isChatGptTranscript = platform === "chatgpt";
+    const requiredStablePasses = isChatGptTranscript ? 3 : 1;
+    const maxTopPasses = isChatGptTranscript
+      ? Math.max(20, THREAD_SCROLL_TOP_MAX_PASSES)
+      : THREAD_SCROLL_TOP_MAX_PASSES;
+    for (let pass = 0; pass < maxTopPasses; pass += 1) {
       throwIfExportCancelled(session);
       setScrollTop(scroller, 0);
       await waitForConversationScrollSettle(scroller, {
-        delay: pass === 0 ? 90 : THREAD_SCROLL_SETTLE_MS,
+        // Allow extra time for ChatGPT to prepend an older virtual batch.
+        delay: isChatGptTranscript
+          ? 180
+          : pass === 0
+            ? 90
+            : THREAD_SCROLL_SETTLE_MS,
         queueScan: false,
         session,
       });
@@ -8282,7 +9110,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       } else {
         stableTopPasses = 0;
       }
-      if (stableTopPasses >= 1) {
+      if (stableTopPasses >= requiredStablePasses) {
         break;
       }
       lastMaxTop = maxTop;
@@ -8446,6 +9274,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function inferPlatformRoleFromRoot(root) {
+    if (platform === "chatgpt") {
+      return inferChatGptRoleFromRoot(root);
+    }
     if (platform === "claude") {
       return inferClaudeRoleFromRoot(root);
     }
@@ -8459,6 +9290,52 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return inferGrokRoleFromRoot(root);
     }
     return null;
+  }
+
+  function inferChatGptRoleFromRoot(root) {
+    if (!root) {
+      return null;
+    }
+    if (
+      (root.matches && root.matches("[data-chatgpt-selection-message-id]")) ||
+      (root.querySelector &&
+        root.querySelector("[data-chatgpt-selection-message-id]"))
+    ) {
+      return "assistant";
+    }
+    if (
+      (root.matches && root.matches("[data-user-message-bubble], .group\\/user-message")) ||
+      (root.querySelector &&
+        root.querySelector("[data-user-message-bubble], .group\\/user-message"))
+    ) {
+      return "user";
+    }
+    const messageScope =
+      (root.closest &&
+        root.closest(
+          "[data-content-search-unit-key], [data-chatgpt-search-message-ids], .block-BQZwFn",
+        )) ||
+      root;
+    const roleLabel =
+      messageScope &&
+      messageScope.querySelector &&
+      messageScope.querySelector("[data-conversation-role]");
+    if (roleLabel) {
+      return ensureString(
+        roleLabel.getAttribute("data-conversation-role"),
+      ).toLowerCase();
+    }
+    // Generated-image roots inherit their role from the surrounding message block.
+    const messageBlock =
+      root.closest && root.closest(".block-BQZwFn");
+    const blockRoleLabel =
+      messageBlock &&
+      messageBlock.querySelector("[data-conversation-role]");
+    return blockRoleLabel
+      ? ensureString(
+        blockRoleLabel.getAttribute("data-conversation-role"),
+      ).toLowerCase()
+      : null;
   }
 
   function inferClaudeRoleFromRoot(root) {
@@ -8567,6 +9444,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!node) return "";
     const clone = node.cloneNode(true);
     preserveChatGptCodeColorsInClone(node, clone);
+    preserveChatGptCodeLanguageInClone(node, clone);
     stripNonExportableNodes(clone);
     return clone.innerHTML;
   }
@@ -8577,11 +9455,175 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     const clone = node.cloneNode(true);
     preserveChatGptCodeColorsInClone(node, clone);
+    preserveChatGptCodeLanguageInClone(node, clone);
     stripNonExportableNodes(clone);
+    materializeMermaidShadowRootSvgs(node, clone);
+    materializeChatGptVisualizationAssets(node, clone);
     if (platform === "grok") {
       normalizeGrokStrokeWidthInlineSpan(clone);
     }
     return clone;
+  }
+
+  function materializeChatGptVisualizationAssets(sourceRoot, cloneRoot) {
+    if (platform !== "chatgpt" || !sourceRoot || !cloneRoot) {
+      return;
+    }
+    const sourceFrames = collectMatchingElementsIncludingRoot(
+      sourceRoot,
+      CHATGPT_VISUALIZATION_FRAME_SELECTOR,
+    );
+    const cloneFrames = collectMatchingElementsIncludingRoot(
+      cloneRoot,
+      CHATGPT_VISUALIZATION_FRAME_SELECTOR,
+    );
+    const count = Math.min(sourceFrames.length, cloneFrames.length);
+    for (let index = 0; index < count; index += 1) {
+      const cloneBlock = cloneFrames[index].closest(
+        ".VisualizationBlock-BXpp50, [class*='VisualizationBlock']",
+      ) || cloneFrames[index].parentElement;
+      if (!cloneBlock) {
+        continue;
+      }
+      cloneBlock.querySelectorAll("[role=status]").forEach((status) => status.remove());
+      const payload = chatGptVisualizationPayloads.get(sourceFrames[index]);
+      if (!payload || (!payload.svg && !payload.image)) {
+        continue;
+      }
+      const replacement = createChatGptVisualizationElement(payload);
+      if (replacement) {
+        cloneBlock.replaceChildren(replacement);
+      }
+    }
+  }
+
+  function createChatGptVisualizationElement(payload) {
+    if (!payload) {
+      return null;
+    }
+    if (payload.svg) {
+      try {
+        const parsed = new DOMParser().parseFromString(payload.svg, "image/svg+xml");
+        const svg = parsed && parsed.documentElement;
+        if (!svg || svg.nodeName.toLowerCase() !== "svg") {
+          return null;
+        }
+        const imported = document.importNode(svg, true);
+        imported.setAttribute("data-omni-chatgpt-visualization", "true");
+        return imported;
+      } catch (err) {
+        return null;
+      }
+    }
+    if (payload.image) {
+      const image = document.createElement("img");
+      image.src = payload.image;
+      image.alt = payload.label || "ChatGPT visualization";
+      image.setAttribute("data-omni-chatgpt-visualization", "true");
+      return image;
+    }
+    return null;
+  }
+
+  async function primeChatGptVisualizationAssets(sourceRoot) {
+    if (platform !== "chatgpt" || !sourceRoot) {
+      return;
+    }
+    const frames = collectMatchingElementsIncludingRoot(
+      sourceRoot,
+      CHATGPT_VISUALIZATION_FRAME_SELECTOR,
+    );
+    await Promise.all(frames.map(async (frame) => {
+      if (chatGptVisualizationPayloads.has(frame)) {
+        return;
+      }
+      const payload = await requestChatGptVisualizationAsset(frame);
+      if (payload) {
+        chatGptVisualizationPayloads.set(frame, payload);
+      }
+    }));
+  }
+
+  function requestChatGptVisualizationAsset(frame) {
+    if (!frame || !frame.contentWindow) {
+      return Promise.resolve(null);
+    }
+    installChatGptVisualizationBridgeListener();
+    const requestId = `omni-visual-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve) => {
+      const timeout = window.setTimeout(() => {
+        chatGptVisualizationRequests.delete(requestId);
+        resolve(null);
+      }, 2200);
+      chatGptVisualizationRequests.set(requestId, {
+        frame,
+        resolve: (payload) => {
+          window.clearTimeout(timeout);
+          resolve(payload || null);
+        },
+      });
+      try {
+        frame.contentWindow.postMessage({
+          type: CHATGPT_VISUALIZATION_BRIDGE_REQUEST,
+          requestId,
+        }, "*");
+      } catch (err) {
+        window.clearTimeout(timeout);
+        chatGptVisualizationRequests.delete(requestId);
+        resolve(null);
+      }
+    });
+  }
+
+  function installChatGptVisualizationBridgeListener() {
+    if (chatGptVisualizationBridgeListenerInstalled) {
+      return;
+    }
+    chatGptVisualizationBridgeListenerInstalled = true;
+    window.addEventListener("message", (event) => {
+      const data = event && event.data;
+      if (!data || data.type !== CHATGPT_VISUALIZATION_BRIDGE_RESPONSE || !data.requestId) {
+        return;
+      }
+      const request = chatGptVisualizationRequests.get(data.requestId);
+      if (!request || event.source !== request.frame.contentWindow ||
+        !/\.oaiusercontent\.com$/i.test(ensureString(event.origin).replace(/^https:\/\//i, ""))) {
+        return;
+      }
+      chatGptVisualizationRequests.delete(data.requestId);
+      request.resolve({
+        svg: ensureString(data.svg),
+        image: ensureString(data.image),
+        label: ensureString(data.label),
+      });
+    });
+  }
+
+  function materializeMermaidShadowRootSvgs(sourceRoot, cloneRoot) {
+    if (!sourceRoot || !cloneRoot || !sourceRoot.querySelectorAll) {
+      return;
+    }
+    const collectMermaidHosts = (root) => {
+      const hosts = [];
+      if (root.matches && root.matches('[data-mermaid="true"]')) {
+        hosts.push(root);
+      }
+      hosts.push(...root.querySelectorAll('[data-mermaid="true"]'));
+      return hosts;
+    };
+    const sourceHosts = collectMermaidHosts(sourceRoot);
+    const cloneHosts = collectMermaidHosts(cloneRoot);
+    const count = Math.min(sourceHosts.length, cloneHosts.length);
+    for (let index = 0; index < count; index += 1) {
+      const shadowRoot = sourceHosts[index].shadowRoot;
+      const sourceSvg = shadowRoot && shadowRoot.querySelector("svg");
+      if (!sourceSvg) {
+        continue;
+      }
+      const clonedSvg = sourceSvg.cloneNode(true);
+      clonedSvg.setAttribute("data-omni-mermaid-svg", "true");
+      cloneHosts[index].replaceChildren(clonedSvg);
+    }
   }
 
   function preserveChatGptCodeColorsInClone(sourceRoot, cloneRoot) {
@@ -8621,6 +9663,43 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
   }
 
+  // Preserve ChatGPT code-language labels before export cleanup.
+  function preserveChatGptCodeLanguageInClone(sourceRoot, cloneRoot) {
+    if (
+      platform !== "chatgpt" ||
+      !sourceRoot ||
+      !cloneRoot ||
+      !sourceRoot.querySelectorAll ||
+      !cloneRoot.querySelectorAll
+    ) {
+      return;
+    }
+    const collectCodeBlocks = (root) => {
+      const blocks = [];
+      if (root.matches && root.matches('[data-code-block="true"]')) {
+        blocks.push(root);
+      }
+      blocks.push(...root.querySelectorAll('[data-code-block="true"]'));
+      return blocks;
+    };
+    const sourceBlocks = collectCodeBlocks(sourceRoot);
+    const cloneBlocks = collectCodeBlocks(cloneRoot);
+    const count = Math.min(sourceBlocks.length, cloneBlocks.length);
+    for (let index = 0; index < count; index += 1) {
+      const sourceBlock = sourceBlocks[index];
+      const languageNode = sourceBlock.querySelector(
+        '[data-markdown-copy="exclude"] .min-w-0.flex-1.truncate, ' +
+          '[data-markdown-copy="exclude"] [class*="truncate"]',
+      );
+      const language = normalizeText(
+        ensureString(languageNode && languageNode.textContent),
+      );
+      if (language) {
+        cloneBlocks[index].setAttribute("data-omni-code-language", language);
+      }
+    }
+  }
+
   function collectMatchingElementsIncludingRoot(root, selector) {
     const elements = [];
     if (root.matches && root.matches(selector)) {
@@ -8648,12 +9727,56 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return;
     }
     normalizeExportableImages(root);
+    stripClaudeSourceBadges(root);
     const unwanted = root.querySelectorAll(NON_EXPORTABLE_NODE_SELECTOR);
     unwanted.forEach((el) => {
+      if (isExportTaskCheckboxControl(el)) {
+        const state = document.createElement("span");
+        state.setAttribute("role", "checkbox");
+        state.setAttribute(
+          "aria-checked",
+          ensureString(el.getAttribute("aria-checked")).toLowerCase() === "true"
+            ? "true"
+            : "false",
+        );
+        el.replaceWith(state);
+        return;
+      }
+      // The code language was copied onto its code block before cleanup.
+      if (
+        el.matches('[data-markdown-copy="exclude"]') &&
+        el.closest('[data-code-block="true"]')
+      ) {
+        el.remove();
+        return;
+      }
       if (nodeHasExportableImages(el) && replaceNodeWithExportableImages(el)) {
         return;
       }
       el.remove();
+    });
+  }
+
+  function isExportTaskCheckboxControl(node) {
+    return Boolean(
+      node &&
+        node.getAttribute &&
+        ensureString(node.getAttribute("role")).toLowerCase() === "checkbox" &&
+        node.hasAttribute("aria-checked") &&
+        node.closest &&
+        node.closest("li"),
+    );
+  }
+
+  function stripClaudeSourceBadges(root) {
+    if (platform !== "claude") {
+      return;
+    }
+    root.querySelectorAll("[data-not-prose]").forEach((badge) => {
+      // Source chips are interface elements, not message content.
+      if (badge.querySelector('a[href]')) {
+        badge.remove();
+      }
     });
   }
 
@@ -9290,18 +10413,80 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       const roleLabel = formatRoleLabel(message.role);
       lines.push(`## ${roleLabel}`);
       lines.push("");
-      const markdownBody =
-        platform === "gemini" &&
-          message &&
-          message.sourceNode &&
-          message.sourceNode.nodeType === Node.ELEMENT_NODE &&
-          message.sourceNode.isConnected
-          ? convertMessageNodeToMarkdown(message.sourceNode, message.text)
-          : convertMessageHtmlToMarkdown(message.html, message.text);
+      const markdownBody = getMessageMarkdownForExport(message);
       lines.push(markdownBody || ensureString(message.text));
       lines.push("");
     });
-    return `${lines.join("\n").trim()}\n`;
+    return `${repairGeneratedMarkdown(lines.join("\n").trim())}\n`;
+  }
+
+  function getMessageMarkdownForExport(message) {
+    if (
+      platform === "gemini" &&
+      message &&
+      message.sourceNode &&
+      message.sourceNode.nodeType === Node.ELEMENT_NODE &&
+      message.sourceNode.isConnected
+    ) {
+      return convertMessageNodeToMarkdown(message.sourceNode, message.text);
+    }
+    return convertMessageHtmlToMarkdown(message && message.html, message && message.text);
+  }
+
+  function getMessagePlainTextForExport(message) {
+    const markdown = getMessageMarkdownForExport(message);
+    return markdownToPlainText(markdown) || ensureString(message && message.text);
+  }
+
+  function markdownToPlainText(markdown) {
+    let insideCodeFence = false;
+    let insideSvgMarkup = false;
+    const plainText = ensureString(markdown)
+      .split("\n")
+      .map((line) => {
+        if (/^\s*`{3,}[^`]*$/.test(line)) {
+          insideCodeFence = !insideCodeFence;
+          return "";
+        }
+        if (insideCodeFence) {
+          return line;
+        }
+        if (insideSvgMarkup) {
+          if (/<\/svg\s*>/i.test(line)) {
+            insideSvgMarkup = false;
+          }
+          return "";
+        }
+        if (/<svg\b/i.test(line)) {
+          if (!/<\/svg\s*>/i.test(line)) {
+            insideSvgMarkup = true;
+          }
+          return line.replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, "[SVG]");
+        }
+        return line
+          .replace(/^\s{0,3}#{1,6}\s+/, "")
+          .replace(
+            /!\[([^\]]*)\]\(([^)\s]+)\)/g,
+            (match, alt, src) => formatPlainTextImageReference(alt, src),
+          )
+          .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
+          .replace(/(\*\*|__|~~|`)/g, "")
+          .replace(/(^|[^\\])\*([^*\n]+)\*/g, "$1$2");
+      })
+      .join("\n");
+    return plainText
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function formatPlainTextImageReference(alt, src) {
+    const label = ensureString(alt).trim();
+    const url = ensureString(src).trim();
+    if (/^(?:data:|blob:)/i.test(url)) {
+      return label;
+    }
+    return label && url ? `${label} (${url})` : label || url;
   }
 
   function convertMessageNodeToMarkdown(sourceNode, fallbackText) {
@@ -9362,6 +10547,31 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
       return "";
     }
+    if (node.matches && node.matches('[data-code-block="true"]')) {
+      return renderMarkdownCodeContainer(node);
+    }
+    if (isMarkdownDiagramSvg(node)) {
+      return `\n\n${node.outerHTML}\n\n`;
+    }
+    if (isMarkdownRenderedDiagram(node)) {
+      return renderMarkdownSvgDiagram(node);
+    }
+    if (
+      node.classList &&
+      (node.classList.contains("md-code-block-banner-wrap") ||
+        node.classList.contains("code-block-decoration"))
+    ) {
+      return "";
+    }
+    // Exclude Claude source badges from Markdown exports.
+    if (
+      platform === "claude" &&
+      node.matches &&
+      node.matches("[data-not-prose]") &&
+      node.querySelector('a[href]')
+    ) {
+      return "";
+    }
 
     const tag = ensureString(node.tagName).toLowerCase();
     const mathResult = renderMarkdownMathNode(node, tag);
@@ -9395,6 +10605,40 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return null;
   }
 
+  function isMarkdownRenderedDiagram(node) {
+    if (!node || !node.classList || !node.classList.contains("md-code-block")) {
+      return false;
+    }
+    return !!node.querySelector(
+      'svg.mermaid-svg, svg[id^="mermaid-svg-"], svg[class*="flowchart"]',
+    );
+  }
+
+  function isMarkdownDiagramSvg(node) {
+    if (!node || ensureString(node.tagName).toLowerCase() !== "svg") {
+      return false;
+    }
+    const className = ensureString(node.getAttribute("class"));
+    const roleDescription = ensureString(node.getAttribute("aria-roledescription"));
+    return (
+      node.getAttribute("data-omni-mermaid-svg") === "true" ||
+      /\b(?:mermaid-svg|flowchart)\b/i.test(className) ||
+      /(?:flowchart|sequence|state|class|entity|requirement|mindmap|timeline|journey|gantt|pie)/i.test(
+        roleDescription,
+      )
+    );
+  }
+
+  function renderMarkdownSvgDiagram(node) {
+    const svg = node.querySelector(
+      'svg.mermaid-svg, svg[id^="mermaid-svg-"], svg[class*="flowchart"]',
+    );
+    if (!svg) {
+      return "";
+    }
+    return `\n\n${svg.outerHTML}\n\n`;
+  }
+
   function renderMarkdownElementByTag(node, ctx, tag) {
     const simple = renderMarkdownSimpleElement(node, ctx, tag);
     if (simple !== null) {
@@ -9416,6 +10660,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       ul: () => renderMarkdownList(node, false, ctx),
       ol: () => renderMarkdownList(node, true, ctx),
       li: () => renderMarkdownListItem(node, ctx, "-"),
+      figure: () => renderMarkdownFigure(node, ctx),
     };
     if (Object.prototype.hasOwnProperty.call(simpleRenderers, tag)) {
       return simpleRenderers[tag]();
@@ -9473,6 +10718,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const content = normalizeInlineMarkdownChunk(
       renderMarkdownChildren(node, ctx),
     );
+    if (tag === "span" && isMarkdownInlineCodeNode(node)) {
+      return wrapMarkdownInlineCode(node.textContent || "");
+    }
     if (tag === "strong" || tag === "b") {
       return content ? `**${content}**` : "";
     }
@@ -9488,13 +10736,34 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (tag === "img") {
       return renderMarkdownImage(node);
     }
+    if (tag === "sub" || tag === "sup") {
+      return content ? `<${tag}>${content}</${tag}>` : "";
+    }
     return null;
+  }
+
+  function isMarkdownInlineCodeNode(node) {
+    if (!node || !node.classList || !node.classList.contains("!font-mono")) {
+      return false;
+    }
+    return Array.from(node.classList).some((className) => {
+      return className.startsWith("bg-") || className.includes("rounded");
+    });
   }
 
   function renderMarkdownLink(node, content) {
     const href = ensureString(node.getAttribute("href")).trim();
     const label = content || href;
+    // Avoid wrapping an existing link to the same URL.
+    if (href && isMarkdownLinkToHref(label, href)) {
+      return label;
+    }
     return href ? `[${label}](${href})` : label;
+  }
+
+  function isMarkdownLinkToHref(value, href) {
+    const match = ensureString(value).match(/^\[([\s\S]*)\]\(([^\s)]+)\)$/);
+    return !!match && ensureString(match[2]) === ensureString(href);
   }
 
   function renderMarkdownImage(node) {
@@ -9503,6 +10772,34 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
     const src = ensureString(node.getAttribute("src")).trim();
     return src ? `![${alt}](${src})` : alt;
+  }
+
+  function renderMarkdownFigure(node, ctx) {
+    const image = node.querySelector("img");
+    if (!image) {
+      return renderMarkdownDefaultElement(node, ctx, "figure");
+    }
+    const imageMarkdown = renderMarkdownImage(image);
+    const caption = node.querySelector("figcaption");
+    const captionText = caption
+      ? normalizeInlineMarkdownChunk(renderMarkdownChildren(caption, ctx))
+      : "";
+    const alt = ensureString(image.getAttribute("alt")).trim();
+    if (
+      !captionText ||
+      normalizeMarkdownComparisonText(captionText) ===
+        normalizeMarkdownComparisonText(alt)
+    ) {
+      return imageMarkdown;
+    }
+    return `${imageMarkdown}\n\n${captionText}`;
+  }
+
+  function normalizeMarkdownComparisonText(value) {
+    return ensureString(value)
+      .replace(/\\([\\`*_[\]])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   function renderMarkdownDefaultElement(node, ctx, tag) {
@@ -9522,9 +10819,26 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (ctx && ctx.inPre) {
       return raw;
     }
-    return escapeMarkdownText(
-      raw.replace(/[ \t\r\f\v]+/g, " ").replace(/\n+/g, " "),
+    return restoreMarkdownReferences(
+      escapeMarkdownText(normalizeMarkdownTextWhitespace(raw)),
     );
+  }
+
+  function normalizeMarkdownTextWhitespace(value) {
+    return ensureString(value)
+      .replace(/[ \t\r\f\v]+/g, " ")
+      .replace(
+        /\n+(?=(?:\[\^[^\]\n]+\]|\*\[[^\]\n]+\]):)/g,
+        "\n",
+      )
+      .replace(/\n+/g, " ");
+  }
+
+  function restoreMarkdownReferences(value) {
+    return ensureString(value)
+      .replace(/\\\[\^([^\]\\]+)\\\]/g, "[^$1]")
+      .replace(/\\\[([^\]\\]+)\\\]\\\[([^\]\\]+)\\\]/g, "[$1][$2]")
+      .replace(/\\\*\\\[([^\]\\]+)\\\]:/g, "*[$1]:");
   }
 
   function renderMarkdownCodeBlock(preNode) {
@@ -9533,7 +10847,40 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       .replace(/\r\n/g, "\n")
       .replace(/\u00a0/g, " ")
       .replace(/\s+$/, "");
-    const language = extractMarkdownCodeLanguage(preNode, codeNode);
+    const language =
+      extractMarkdownCodeLanguage(preNode, codeNode) ||
+      inferMarkdownCodeLanguage(rawCode);
+    const fenceSize = Math.max(3, longestBacktickRun(rawCode) + 1);
+    const fence = "`".repeat(fenceSize);
+    return `\n\n${fence}${language}\n${rawCode}\n${fence}\n\n`;
+  }
+
+  function renderMarkdownCodeContainer(container) {
+    if (!container || !container.querySelector) {
+      return "";
+    }
+    const codeNode = container.querySelector(
+      "pre code, [data-code-block-source] code, .cm-content, code",
+    );
+    if (!codeNode) {
+      return "";
+    }
+    const editorLines = Array.from(codeNode.querySelectorAll(".cm-line"));
+    const rawCode = (editorLines.length
+      ? editorLines.map((line) => line.textContent || "").join("\n")
+      : codeNode.textContent || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+$/, "");
+    if (!rawCode) {
+      return "";
+    }
+    const language =
+      sanitizeMarkdownLanguage(
+        container.getAttribute("data-omni-code-language") || "",
+      ) ||
+      extractMarkdownCodeLanguage(codeNode.closest("pre") || codeNode, codeNode) ||
+      inferMarkdownCodeLanguage(rawCode);
     const fenceSize = Math.max(3, longestBacktickRun(rawCode) + 1);
     const fence = "`".repeat(fenceSize);
     return `\n\n${fence}${language}\n${rawCode}\n${fence}\n\n`;
@@ -9590,61 +10937,74 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const indent = "  ".repeat(depth);
     const continuationIndent = `${indent}${" ".repeat(marker.length + 1)}`;
     const nestedCtx = Object.assign({}, ctx, { listDepth: depth + 1 });
+    const taskState = getMarkdownTaskState(listItemNode);
+    let result = `${indent}${marker}${
+      taskState === null ? "" : taskState ? " [x]" : " [ ]"
+    }`;
+    let hasLeadContent = false;
 
-    let inlineBuffer = "";
-    const trailingBlocks = [];
+    const appendInline = (value) => {
+      let inline = normalizeInlineMarkdownChunk(value);
+      if (!hasLeadContent && taskState !== null) {
+        inline = inline.replace(/^\\?\[([xX ])\\?\]\s*/, "");
+      }
+      if (!inline) {
+        return;
+      }
+      result += hasLeadContent
+        ? `\n${continuationIndent}${inline}`
+        : ` ${inline}`;
+      hasLeadContent = true;
+    };
+
+    const appendBlock = (value) => {
+      const block = finalizeMarkdownOutput(value);
+      if (!block) {
+        return;
+      }
+      const padded = block
+        .split("\n")
+        .map((line) => (line ? `${continuationIndent}${line}` : ""))
+        .join("\n");
+      result += `${hasLeadContent ? "\n\n" : "\n"}${padded}`;
+      hasLeadContent = true;
+    };
 
     Array.from(listItemNode.childNodes || []).forEach((child) => {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const tag = ensureString(child.tagName).toLowerCase();
+        if (isMarkdownTaskCheckboxElement(child)) {
+          return;
+        }
         if (tag === "ul" || tag === "ol") {
-          const nested = renderMarkdownList(
-            child,
-            tag === "ol",
-            nestedCtx,
-          ).trimEnd();
+          const nested = renderMarkdownList(child, tag === "ol", nestedCtx).trimEnd();
           if (nested) {
-            trailingBlocks.push({ kind: "nested", value: nested });
+            result += `\n${nested}`;
           }
           return;
         }
-        if (isMarkdownListItemBlockTag(tag)) {
-          const block = finalizeMarkdownOutput(
-            renderMarkdownNode(
-              child,
-              Object.assign({}, ctx, { listDepth: depth }),
-            ),
+        if (tag === "p") {
+          const paragraph = normalizeInlineMarkdownChunk(
+            renderMarkdownChildren(child, Object.assign({}, ctx, { listDepth: depth })),
           );
-          if (block) {
-            trailingBlocks.push({ kind: "block", value: block });
+          if (!hasLeadContent) {
+            appendInline(paragraph);
+          } else {
+            appendBlock(paragraph);
           }
           return;
         }
       }
-      inlineBuffer += renderMarkdownNode(
+
+      const rendered = renderMarkdownNode(
         child,
         Object.assign({}, ctx, { listDepth: depth }),
       );
-    });
-
-    const inlineText = normalizeInlineMarkdownChunk(inlineBuffer);
-    let result = `${indent}${marker} ${inlineText}`.replace(/[ \t]+$/g, "");
-
-    trailingBlocks.forEach((entry) => {
-      if (!entry || !entry.value) {
-        return;
+      if (/\n/.test(rendered) || /^\s*`{3,}/.test(rendered)) {
+        appendBlock(rendered);
+      } else {
+        appendInline(rendered);
       }
-      if (entry.kind === "nested") {
-        result += `\n${entry.value}`;
-        return;
-      }
-      const padded = entry.value
-        .split("\n")
-        .map((line) =>
-          line ? `${continuationIndent}${line}` : continuationIndent,
-        )
-        .join("\n");
-      result += `\n${padded}`;
     });
 
     return result.trimEnd();
@@ -9664,6 +11024,44 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       node.getAttribute &&
       ensureString(node.getAttribute("type")).toLowerCase() === "checkbox"
     );
+  }
+
+  function isMarkdownTaskCheckboxElement(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+    return (
+      isMarkdownCheckboxInput(node) ||
+      ensureString(node.getAttribute("role")).toLowerCase() === "checkbox" ||
+      !!(
+        node.classList &&
+        node.classList.contains("ds-markdown-task-checkbox")
+      )
+    );
+  }
+
+  function getMarkdownTaskState(listItemNode) {
+    if (!listItemNode || !listItemNode.querySelector) {
+      return null;
+    }
+    const checkbox = listItemNode.querySelector(
+      'input[type="checkbox"], [role="checkbox"], .ds-markdown-task-checkbox',
+    );
+    if (checkbox) {
+      if (isMarkdownCheckboxInput(checkbox)) {
+        return checkbox.checked || checkbox.hasAttribute("checked");
+      }
+      const ariaChecked = ensureString(checkbox.getAttribute("aria-checked"))
+        .toLowerCase();
+      if (ariaChecked) {
+        return ariaChecked === "true" || ariaChecked === "mixed";
+      }
+      return /[☑✓✔]/.test(ensureString(checkbox.textContent));
+    }
+    const literalMarker = ensureString(listItemNode.textContent).match(
+      /^\s*\[([xX ])\]\s+/,
+    );
+    return literalMarker ? /x/i.test(literalMarker[1]) : null;
   }
 
   function renderMarkdownCheckboxInput(node) {
@@ -9749,7 +11147,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       preNode &&
       preNode.closest &&
       preNode.closest(
-        '[data-testid="code-block"], .md-code-block, code-block, .code-block',
+        '[data-testid="code-block"], [data-code-block="true"], .md-code-block, code-block, .code-block',
       ),
     ].filter(Boolean);
 
@@ -9799,9 +11197,29 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function sanitizeMarkdownLanguage(value) {
-    return ensureString(value)
+    const language = ensureString(value)
       .trim()
-      .replace(/[^a-z0-9_+.-]/gi, "");
+      .toLowerCase()
+      .replace(/[^a-z0-9_+.#-]/gi, "");
+    return MARKDOWN_CODE_LANGUAGES.has(language) ? language : "";
+  }
+
+  function inferMarkdownCodeLanguage(rawCode) {
+    const source = ensureString(rawCode).trimStart();
+    if (
+      /^(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|journey|mindmap|timeline|quadrantChart|pie)\b/.test(
+        source,
+      )
+    ) {
+      return "mermaid";
+    }
+    if (/^<svg\b/i.test(source)) {
+      return "svg";
+    }
+    if (/^(?:<!doctype html|<html\b|<(?:article|body|div|main|section|table)\b)/i.test(source)) {
+      return "html";
+    }
+    return "";
   }
 
   function detectKatexMode(node) {
@@ -9835,7 +11253,25 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function escapeMarkdownText(text) {
     return ensureString(text)
       .replace(/\\/g, "\\\\")
-      .replace(/([`*_{}[\]()#+!>|])/g, "\\$1");
+      // Escape only delimiters that can alter inline Markdown.
+      .replace(/([`*_[\]])/g, "\\$1");
+  }
+
+  function repairGeneratedMarkdown(markdown) {
+    return ensureString(markdown)
+    // Repair nested rich-text wrappers around generated headings.
+      .replace(/^\*\*(#{1,6}\s+.+?)\*\*$/gm, "$1")
+    // Repair escaped bold markers from nested rich-text wrappers.
+      .replace(/\*\*\\\*\\\*([\s\S]*?)\\\*\\\*\*\*/g, "**$1**")
+    // Some chat renderers expose a code language both as a banner and fence.
+      .replace(
+        /^([^\n`]{1,32})\n\n(`{3,})([a-z0-9_+.#-]+)\s*\n/gim,
+        (match, label, fence, language) =>
+          sanitizeMarkdownLanguage(label) === sanitizeMarkdownLanguage(language) &&
+          sanitizeMarkdownLanguage(language)
+            ? `${fence}${language}\n`
+            : match,
+      );
   }
 
   function normalizeInlineMarkdownChunk(value) {
@@ -9876,22 +11312,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
   }
 
-  function isMarkdownListItemBlockTag(tag) {
-    return (
-      tag === "p" ||
-      tag === "div" ||
-      tag === "pre" ||
-      tag === "blockquote" ||
-      tag === "table" ||
-      tag === "h1" ||
-      tag === "h2" ||
-      tag === "h3" ||
-      tag === "h4" ||
-      tag === "h5" ||
-      tag === "h6"
-    );
-  }
-
   function buildExportText(messages, selectedOptions) {
     const options = normalizeExportOptions(selectedOptions);
     const title = `${getPlatformLabel()} Export`;
@@ -9909,7 +11329,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     messages.forEach((message) => {
       const roleLabel = formatRoleLabel(message.role);
       lines.push(`${roleLabel}:`);
-      lines.push(ensureString(message.text));
+      lines.push(getMessagePlainTextForExport(message));
       lines.push("");
     });
     return `${lines.join("\n").trim()}\n`;
@@ -9928,48 +11348,10 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     payload.messages = messages.map((message) => ({
       role: ensureString(message.role),
-      text: ensureString(message.text),
+      text: getMessagePlainTextForExport(message),
       html: ensureString(message.html),
     }));
     return JSON.stringify(payload, null, 2);
-  }
-
-  function buildExportHtml(messages) {
-    const title = `${getPlatformLabel()} Export`;
-    const conversationTitle = getExportConversationTitle();
-    const rows = messages
-      .map((message) => {
-        const roleLabel =
-          message.role.charAt(0).toUpperCase() + message.role.slice(1);
-        return `
-        <section class="message">
-          <h3>${escapeHtml(roleLabel)}</h3>
-          <pre>${escapeHtml(message.text)}</pre>
-        </section>
-      `;
-      })
-      .join("");
-    return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(title)}</title>
-  <style>
-    :root { color-scheme: light; }
-    body { font-family: "Segoe UI", system-ui, sans-serif; margin: 32px; color: #0f172a; }
-    h1 { font-size: 20px; margin-bottom: 6px; }
-    p.meta { color: #475569; font-size: 12px; margin-top: 0; }
-    section.message { margin: 18px 0 22px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
-    section.message h3 { margin: 0 0 8px; font-size: 13px; text-transform: capitalize; color: #1e293b; }
-    section.message pre { margin: 0; white-space: pre-wrap; font-family: "Consolas", "SFMono-Regular", ui-monospace, monospace; font-size: 12px; line-height: 1.45; }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  <p class="meta">${conversationTitle ? `Conversation: ${escapeHtml(conversationTitle)}<br>` : ""}URL: ${escapeHtml(location.href)}<br>Exported: ${escapeHtml(new Date().toISOString())}</p>
-  ${rows}
-</body>
-</html>`;
   }
 
   // ─────────────────────────────────────────────
@@ -10142,8 +11524,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (!text) {
       return null;
     }
+    const isStructuralWhitespace = /[\r\n]/.test(text);
     const normalized = text.replace(/\s*\n+\s*/g, " ");
     if (normalized.trim() === "" && normalized.length > 0) {
+      // Ignore indentation-only nodes to prevent blank PDF lines in nested content.
+      if (isStructuralWhitespace) {
+        return null;
+      }
       return { text: normalized };
     }
     return normalized.trim()
@@ -10155,11 +11542,31 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     if (node.matches && node.matches(NON_EXPORTABLE_NODE_SELECTOR)) {
       return null;
     }
+    const mermaidDiagram = buildPdfMermaidDiagram(node);
+    if (mermaidDiagram) {
+      return mermaidDiagram;
+    }
+    const deepSeekDiagram = buildPdfDeepSeekRenderedDiagram(node);
+    if (deepSeekDiagram) {
+      return deepSeekDiagram;
+    }
+    const htmlDiagram = buildPdfHtmlDiagram(node);
+    if (htmlDiagram) {
+      return htmlDiagram;
+    }
+    const svgDiagram = buildPdfInlineSvgDiagram(node);
+    if (svgDiagram) {
+      return svgDiagram;
+    }
+    const mathNode = buildPdfMathNode(node);
+    if (mathNode) {
+      return mathNode;
+    }
     const specialCodeBlock = buildSpecialPdfCodeBlock(node);
     if (specialCodeBlock) {
       return specialCodeBlock;
     }
-    if (isGrokInlineCodeLikeElement(node)) {
+    if (isPdfInlineCodeNode(node)) {
       return buildInlineCodeTextStyle(node.textContent || "", {
         noWrap: false,
       });
@@ -10167,6 +11574,1397 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const tagName = node.tagName.toLowerCase();
     const childContent = parsePdfChildContent(node);
     return parsePdfElementByTag(node, tagName, childContent);
+  }
+
+  function buildPdfMermaidDiagram(node) {
+    if (!node || !node.matches || !node.matches('[data-mermaid="true"]')) {
+      return null;
+    }
+    const svg = node.querySelector('svg[data-omni-mermaid-svg="true"]');
+    if (!svg || typeof XMLSerializer !== "function") {
+      return null;
+    }
+    return buildPdfMermaidSvgContent(
+      svg,
+      node.getAttribute("aria-label") || "Mermaid diagram",
+    );
+  }
+
+  function buildPdfDeepSeekRenderedDiagram(node) {
+    if (
+      platform !== "deepseek" ||
+      !node ||
+      !node.matches ||
+      !node.matches(".md-code-block")
+    ) {
+      return null;
+    }
+    // Prefer DeepSeek's rendered Mermaid SVG over its interactive source container.
+    const svg = Array.from(
+      node.querySelectorAll(
+        'svg.mermaid-svg, svg[id^="mermaid-svg-"], svg[role~="graphics-document"]',
+      ),
+    ).find((candidate) => isPdfExportableDiagramSvg(candidate));
+    if (!svg) {
+      return null;
+    }
+    return buildPdfMermaidSvgContent(svg, "Mermaid diagram");
+  }
+
+  function buildPdfMermaidSvgContent(svg, fallbackLabel) {
+    if (!svg || typeof XMLSerializer !== "function") {
+      return null;
+    }
+    const sanitizedSvg = sanitizeMermaidSvgForPdf(svg);
+    const viewBox = ensureString(sanitizedSvg.getAttribute("viewBox"))
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const sourceWidth = viewBox.length === 4 ? viewBox[2] : 0;
+    const sourceHeight = viewBox.length === 4 ? viewBox[3] : 0;
+    // Use the printable width so wide Mermaid diagrams remain legible.
+    const maxWidth = 510;
+    const maxHeight = 500;
+    const ratio = sourceWidth > 0 && sourceHeight > 0
+      ? sourceWidth / sourceHeight
+      : 2;
+    const width = Math.min(maxWidth, maxHeight * ratio);
+    try {
+      return {
+        svg: new XMLSerializer().serializeToString(sanitizedSvg),
+        width: width,
+        alignment: "center",
+        margin: [0, 6, 0, 10],
+      };
+    } catch (err) {
+      return {
+        text: formatPdfTextWithEmoji(
+          fallbackLabel || "Mermaid diagram",
+        ),
+        italics: true,
+        color: "#64748b",
+        margin: [0, 4, 0, 8],
+      };
+    }
+  }
+
+  function buildPdfInlineSvgDiagram(node) {
+    if (!node || !node.tagName || node.tagName.toLowerCase() !== "svg") {
+      return null;
+    }
+    // Mermaid hosts are handled separately to materialize their shadow-root SVG.
+    if (node.closest && node.closest('[data-mermaid="true"]')) {
+      return null;
+    }
+    if (!isPdfExportableDiagramSvg(node)) {
+      return null;
+    }
+    if (typeof XMLSerializer !== "function") {
+      return null;
+    }
+    // Route inline Mermaid SVGs through the print-safe Mermaid sanitizer.
+    const svg = isMermaidDiagramSvg(node)
+      ? sanitizeMermaidSvgForPdf(node)
+      : sanitizeInlineSvgForPdf(node);
+    const viewBox = ensureString(svg.getAttribute("viewBox"))
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const sourceWidth = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : 720;
+    const sourceHeight = viewBox.length === 4 && viewBox[3] > 0 ? viewBox[3] : 240;
+    const width = Math.min(510, 440 * (sourceWidth / sourceHeight));
+    try {
+      return {
+        svg: new XMLSerializer().serializeToString(svg),
+        width: width,
+        alignment: "center",
+        margin: [0, 5, 0, 8],
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function isMermaidDiagramSvg(svg) {
+    if (!svg || !svg.getAttribute) {
+      return false;
+    }
+    const signature = [
+      svg.getAttribute("class"),
+      svg.getAttribute("id"),
+      svg.getAttribute("aria-roledescription"),
+      Array.from(svg.querySelectorAll("style"))
+        .map((style) => style.textContent || "")
+        .join("\n"),
+    ].join("\n");
+    if (/(?:mermaid|flowchart|sequence(?:diagram)?|classdiagram|statediagram|erdiagram|gantt|journey|mindmap|timeline)/i.test(signature)) {
+      return true;
+    }
+    return Boolean(
+      svg.querySelector(
+        ".edgePaths, .edgeLabel, .clusters, .flowchart-link, .messageLine, .actor, .classGroup, .stateGroup",
+      ),
+    );
+  }
+
+  function isPdfExportableDiagramSvg(svg) {
+    if (!svg || !svg.getAttribute) {
+      return false;
+    }
+    // Exclude UI glyphs and action icons from PDF diagram rendering.
+    if (svg.closest && svg.closest("button, a, [role=button], [data-testid=chatgpt-citation]")) {
+      return false;
+    }
+    const viewBox = ensureString(svg.getAttribute("viewBox"))
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const width = viewBox.length === 4 ? viewBox[2] : Number(svg.getAttribute("width"));
+    const height = viewBox.length === 4 ? viewBox[3] : Number(svg.getAttribute("height"));
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      return Boolean(svg.getAttribute("role") === "img");
+    }
+    if (width <= 64 && height <= 64) {
+      return false;
+    }
+    return Boolean(
+      svg.getAttribute("role") === "img" ||
+        svg.querySelector("text, rect, line, polyline, polygon, foreignObject"),
+    );
+  }
+
+  function buildPdfHtmlDiagram(node) {
+    if (!node || !node.children || !node.querySelector) {
+      return null;
+    }
+    const grid = Array.from(node.children).find((child) => {
+      const sections = Array.from(child.children || []).filter(
+        (entry) => entry.tagName && entry.tagName.toLowerCase() === "section",
+      );
+      return sections.length >= 2;
+    });
+    if (!grid) {
+      return null;
+    }
+    const sections = Array.from(grid.children || []).filter(
+      (entry) => entry.tagName && entry.tagName.toLowerCase() === "section",
+    );
+    const svg = node.querySelector('svg[role="img"], svg[aria-label]');
+    if (!sections.length || !svg) {
+      return null;
+    }
+    const cards = sections.map((section) => {
+      const lines = Array.from(section.children || [])
+        .map((child) => normalizeText(child.textContent || ""))
+        .filter(Boolean);
+      return {
+        stack: lines.map((line, index) => ({
+          text: formatPdfTextWithEmoji(line),
+          fontSize: index === 0 ? 8 : index === 1 ? 10 : 8,
+          bold: index === 1,
+          color: index === 0 ? "#64748b" : "#0f172a",
+          alignment: "center",
+          margin: [0, index ? 2 : 0, 0, 0],
+        })),
+        margin: [5, 6, 5, 6],
+        border: [true, true, true, true],
+        fillColor: "#ffffff",
+      };
+    });
+    const row = [];
+    cards.forEach((card, index) => {
+      if (index) {
+        row.push({
+          text: "→",
+          fontSize: 15,
+          color: "#64748b",
+          alignment: "center",
+          margin: [2, 14, 2, 0],
+          border: [false, false, false, false],
+        });
+      }
+      row.push(card);
+    });
+    const widths = row.map((entry) => entry.text === "→" ? 18 : "*");
+    const visual = buildPdfInlineSvgDiagram(svg);
+    return {
+      stack: [
+        {
+          table: { widths: widths, body: [row] },
+          layout: {
+            hLineWidth: () => 0.6,
+            vLineWidth: () => 0.6,
+            hLineColor: () => "#94a3b8",
+            vLineColor: () => "#94a3b8",
+            paddingLeft: () => 0,
+            paddingRight: () => 0,
+            paddingTop: () => 0,
+            paddingBottom: () => 0,
+          },
+        },
+        ...(visual ? [visual] : []),
+      ],
+      margin: [0, 5, 0, 8],
+    };
+  }
+
+  function sanitizeInlineSvgForPdf(sourceSvg) {
+    const clone = sourceSvg.cloneNode(true);
+    const viewBox = ensureString(clone.getAttribute("viewBox"))
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const width = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : 720;
+    const height = viewBox.length === 4 && viewBox[3] > 0 ? viewBox[3] : 240;
+    const colorMap = {
+      "var(--viz-card)": "none",
+      "var(--viz-border)": "#64748b",
+      "var(--viz-text)": "#0f172a",
+      "var(--viz-muted)": "#475569",
+      currentColor: "#334155",
+    };
+    clone.removeAttribute("class");
+    clone.removeAttribute("style");
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+    clone.querySelectorAll("[fill], [stroke], [color]").forEach((element) => {
+      ["fill", "stroke", "color"].forEach((attribute) => {
+        const value = ensureString(element.getAttribute(attribute)).trim();
+        if (colorMap[value]) {
+          element.setAttribute(attribute, colorMap[value]);
+        }
+      });
+    });
+    clone.querySelectorAll("text").forEach((label) => {
+      if (!label.getAttribute("fill") || /var\(/.test(label.getAttribute("fill"))) {
+        label.setAttribute("fill", "#0f172a");
+      }
+      label.setAttribute("font-family", "Arial, sans-serif");
+    });
+    return clone;
+  }
+
+  function sanitizeMermaidSvgForPdf(svg) {
+    const clone = svg.cloneNode(true);
+    const viewBox = ensureString(clone.getAttribute("viewBox"))
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    const sourceWidth = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : 640;
+    const sourceHeight = viewBox.length === 4 && viewBox[3] > 0 ? viewBox[3] : 320;
+    const stroke = "#334155";
+    const text = "#111827";
+    const sourceStyles = Array.from(clone.querySelectorAll("style"))
+      .map((style) => style.textContent || "")
+      .join("\n");
+    const sourceMetadata = `${ensureString(clone.getAttribute("class"))}\n${sourceStyles}`;
+    const isPieChart =
+      /(?:pieCircle|pieTitleText|\.pie\b)/i.test(
+        `${ensureString(clone.getAttribute("class"))}\n${sourceStyles}`,
+      ) || Boolean(clone.querySelector(".pieCircle, .pieTitleText"));
+    const isGanttChart = /(?:gantt|\.task\b)/i.test(sourceMetadata) && Boolean(
+      clone.querySelector(".task") || clone.querySelector(".grid, .today, .tick, .gantt"),
+    );
+    const isJourneyDiagram = Boolean(
+      clone.querySelector(".journey, [class*='journey' i]"),
+    );
+    // Detect mindmaps before removing shadow-root styles.
+    const isMindmapDiagram = /mindmap/i.test(sourceMetadata) || Boolean(
+      clone.querySelector(".mindmap-node, [class*='mindmap-node' i]"),
+    );
+
+    // Replace Mermaid's non-portable stylesheet with print-safe SVG styles.
+    clone.querySelectorAll("style").forEach((style) => style.remove());
+    clone.removeAttribute("style");
+    clone.setAttribute("width", String(sourceWidth));
+    clone.setAttribute("height", String(sourceHeight));
+    clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    addMermaidSvgViewportPadding(clone, viewBox);
+    normalizeMermaidDarkLabeledShapesForPdf(clone, stroke);
+    normalizeMermaidDefaultShapeFillsForPdf(clone, stroke);
+    normalizeMermaidNodeShapesForPdf(clone, stroke);
+    clone.querySelectorAll(".edgePaths path, path.flowchart-link").forEach((edge) => {
+      edge.setAttribute("style", `fill:none;stroke:${stroke};stroke-width:1.4`);
+    });
+    // Restore portable strokes for sequence lines while retaining dashed replies.
+    clone.querySelectorAll("line, polyline").forEach((line) => {
+      const originalStyle = ensureString(line.getAttribute("style"));
+      const dash = line.getAttribute("stroke-dasharray") ||
+        getSvgInlineStyleValue(originalStyle, "stroke-dasharray");
+      const className = ensureString(line.getAttribute("class"));
+      const width = /messageLine/.test(className) ? "1.5" : "1.1";
+      line.setAttribute(
+        "style",
+        `fill:none;stroke:${stroke};stroke-width:${width}${dash ? `;stroke-dasharray:${dash}` : ""}`,
+      );
+    });
+    // Render Mermaid sequence actors as outline-only print shapes.
+    clone.querySelectorAll("rect.actor, rect.actor-top, rect.actor-bottom").forEach((actor) => {
+      actor.setAttribute("style", `fill:none;stroke:${stroke};stroke-width:1.6`);
+    });
+    clone.querySelectorAll(".marker .arrowMarkerPath, marker path, marker polygon").forEach((marker) => {
+      marker.setAttribute("style", `fill:${stroke};stroke:${stroke};stroke-width:1`);
+    });
+    clone.querySelectorAll("marker line, marker circle").forEach((marker) => {
+      marker.setAttribute("style", `fill:none;stroke:${stroke};stroke-width:1`);
+    });
+    normalizeMermaidSequenceArrowDirections(clone);
+    clone.querySelectorAll("text").forEach((label) => {
+      const originalStyle = ensureString(label.getAttribute("style"));
+      const explicitAnchor = label.getAttribute("text-anchor") ||
+        getSvgInlineStyleValue(originalStyle, "text-anchor");
+      const isCenteredDiagramLabel = Boolean(
+        label.closest(
+          ".node, .label, .edgeLabel, .actor, [class*='stateLabel' i], [class*='state-label' i]",
+        ) ||
+          /(?:^|\s)(?:actor|actor-box|messageText|stateLabel|state-label)(?:\s|$)/.test(
+            ensureString(label.getAttribute("class")),
+          ),
+      );
+      const anchor = explicitAnchor || (isCenteredDiagramLabel ? "middle" : "start");
+      label.setAttribute("text-anchor", anchor);
+      label.setAttribute(
+        "style",
+        `fill:${text};font-family:Arial,sans-serif;font-size:14px;text-anchor:${anchor}`,
+      );
+    });
+    clone.querySelectorAll(".edgeLabel .background, .label .background").forEach((background) => {
+      background.setAttribute("style", "fill:none;stroke:none");
+    });
+    // Clear sequence label backgrounds that would otherwise stay dark in PDF.
+    clone.querySelectorAll(".labelBox, polygon.labelBox, rect.labelBox").forEach((box) => {
+      box.setAttribute("fill", "none");
+      box.setAttribute("style", `fill:none;stroke:${stroke};stroke-width:1`);
+    });
+    // Convert unsupported foreignObject labels to standard SVG text.
+    clone.querySelectorAll("foreignObject").forEach((foreignObject) => {
+      const rawText = ensureString(
+        foreignObject.innerText || foreignObject.textContent || "",
+      );
+      if (!normalizeText(rawText)) {
+        foreignObject.remove();
+        return;
+      }
+      const label = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
+      const x = Number(foreignObject.getAttribute("x")) || 0;
+      const width = Number(foreignObject.getAttribute("width")) || 0;
+      const y = Number(foreignObject.getAttribute("y")) || 0;
+      const height = Number(foreignObject.getAttribute("height")) || 0;
+      const lineHeight = 15;
+      const detailLabel = /(?:^|\n)\s*[+#-]/.test(rawText) ||
+        /(?:entity|requirement|class)/i.test(
+          ensureString(foreignObject.parentElement && foreignObject.parentElement.getAttribute("class")),
+        );
+      const lines = wrapMermaidForeignObjectText(
+        rawText,
+        Math.max(8, Math.floor(width / 7.2)),
+      );
+      const anchor = detailLabel ? "start" : "middle";
+      const labelX = detailLabel ? x + 5 : x + width / 2;
+      const labelY = height > 0
+        ? y + Math.max(lineHeight, (height - (lines.length - 1) * lineHeight) / 2)
+        : y + lineHeight;
+      label.setAttribute("x", String(labelX));
+      label.setAttribute("y", String(labelY));
+      label.setAttribute("dominant-baseline", "middle");
+      label.setAttribute("text-anchor", anchor);
+      label.setAttribute("font-size", "14");
+      label.setAttribute(
+        "style",
+        `fill:#111827;font-family:Arial,sans-serif;font-size:14px;text-anchor:${anchor}`,
+      );
+      lines.forEach((line, index) => {
+        const span = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "tspan",
+        );
+        span.textContent = line;
+        span.setAttribute("x", String(labelX));
+        span.setAttribute("dy", index ? String(lineHeight) : "0");
+        label.appendChild(span);
+      });
+      foreignObject.replaceWith(label);
+    });
+    normalizeMermaidTextPlacementForPdf(clone);
+    if (isGanttChart) {
+      normalizeMermaidGanttForPdf(clone, stroke, text);
+    }
+    if (isJourneyDiagram) {
+      normalizeMermaidJourneyForPdf(clone, stroke, text);
+    }
+    if (isMindmapDiagram) {
+      normalizeMermaidMindmapForPdf(clone, stroke);
+    }
+    if (isPieChart) {
+      normalizeMermaidPieForPdf(clone, viewBox, text);
+    }
+    return clone;
+  }
+
+  function addMermaidSvgViewportPadding(svg, viewBox) {
+    if (!Array.isArray(viewBox) || viewBox.length !== 4 ||
+      !Number.isFinite(viewBox[2]) || !Number.isFinite(viewBox[3]) ||
+      viewBox[2] <= 0 || viewBox[3] <= 0) {
+      return;
+    }
+    // Add viewBox padding to prevent pdfMake clipping labels and arrowheads.
+    const padding = Math.max(8, Math.min(24, Math.min(viewBox[2], viewBox[3]) * 0.035));
+    svg.setAttribute(
+      "viewBox",
+      `${viewBox[0] - padding} ${viewBox[1] - padding} ${viewBox[2] + padding * 2} ${viewBox[3] + padding * 2}`,
+    );
+  }
+
+  function normalizeMermaidDarkLabeledShapesForPdf(svg, stroke) {
+    // Clear inherited dark group fills after removing Mermaid styles.
+    svg.querySelectorAll("g[fill], g[style*='fill' i]").forEach((group) => {
+      if (group.closest("marker, defs, clipPath, mask")) {
+        return;
+      }
+      const paint = getSvgInlineStyleValue(group.getAttribute("style"), "fill") ||
+        ensureString(group.getAttribute("fill"));
+      if (!isDarkSvgPaint(paint)) {
+        return;
+      }
+      group.removeAttribute("fill");
+      setSvgInlineStyleProperty(group, "fill", "none");
+    });
+    svg.querySelectorAll("rect, polygon, ellipse, circle, path").forEach((shape) => {
+      if (shape.closest("marker, defs, clipPath, mask")) {
+        return;
+      }
+      const paint = getSvgInlineStyleValue(
+        shape.getAttribute("style"),
+        "fill",
+      ) || ensureString(shape.getAttribute("fill"));
+      if (!isDarkSvgPaint(paint)) {
+        return;
+      }
+      // Preserve solid unlabeled circular markers; convert other dark content shapes to print outlines.
+      if (shape.tagName.toLowerCase() === "circle") {
+        return;
+      }
+      const priorStyle = ensureString(shape.getAttribute("style"))
+        .replace(/(?:^|;)\s*fill\s*:\s*[^;]*/gi, "")
+        .replace(/;+$/g, "");
+      shape.setAttribute("fill", "none");
+      shape.setAttribute(
+        "style",
+        `${priorStyle}${priorStyle ? ";" : ""}fill:none;stroke:${stroke};stroke-width:1.2`,
+      );
+    });
+  }
+
+  function normalizeMermaidDefaultShapeFillsForPdf(svg, stroke) {
+    // Apply print-safe shape fills without altering paths, markers, or chart sectors.
+    svg.querySelectorAll("rect, polygon, ellipse").forEach((shape) => {
+      if (shape.closest("marker, defs, clipPath, mask")) {
+        return;
+      }
+      const paint = getSvgInlineStyleValue(shape.getAttribute("style"), "fill") ||
+        ensureString(shape.getAttribute("fill"));
+      if (paint && paint.toLowerCase() !== "inherit") {
+        return;
+      }
+      shape.setAttribute("fill", "none");
+      setSvgInlineStyleProperty(shape, "fill", "none");
+      setSvgInlineStyleProperty(shape, "stroke", stroke);
+      setSvgInlineStyleProperty(shape, "stroke-width", "1.2");
+    });
+  }
+
+  function isDarkSvgPaint(value) {
+    const paint = ensureString(value).trim().toLowerCase();
+    if (!paint || paint === "none" || paint === "transparent") {
+      return false;
+    }
+    if (paint === "black" || paint === "#000" || paint === "#000000") {
+      return true;
+    }
+    const hex = paint.match(/^#([0-9a-f]{6})$/i);
+    if (hex) {
+      const numeric = parseInt(hex[1], 16);
+      const red = (numeric >> 16) & 255;
+      const green = (numeric >> 8) & 255;
+      const blue = numeric & 255;
+      return red * 0.2126 + green * 0.7152 + blue * 0.0722 < 54;
+    }
+    const rgb = paint.match(/^rgba?\(\s*(\d+)\s*[ ,]\s*(\d+)\s*[ ,]\s*(\d+)/i);
+    return Boolean(
+      rgb && Number(rgb[1]) * 0.2126 + Number(rgb[2]) * 0.7152 + Number(rgb[3]) * 0.0722 < 54,
+    );
+  }
+
+  function wrapMermaidForeignObjectText(value, maxChars) {
+    const output = [];
+    ensureString(value).replace(/\r/g, "").split("\n").forEach((rawLine) => {
+      const words = normalizeText(rawLine).split(/\s+/).filter(Boolean);
+      if (!words.length) {
+        return;
+      }
+      let line = "";
+      words.forEach((word) => {
+        const next = line ? `${line} ${word}` : word;
+        if (line && next.length > maxChars) {
+          output.push(line);
+          line = word;
+        } else {
+          line = next;
+        }
+      });
+      if (line) {
+        output.push(line);
+      }
+    });
+    return output.length ? output : [normalizeText(value)];
+  }
+
+  function normalizeMermaidTextPlacementForPdf(svg) {
+    svg.querySelectorAll("text").forEach((label) => {
+      const classTrail = collectSvgClassTrail(label);
+      if (/(?:pie|legend|task|tick|grid|gantt)/i.test(classTrail)) {
+        return;
+      }
+      const bounds = findMermaidTextContainerBounds(label);
+      if (!bounds) {
+        return;
+      }
+      const value = normalizeText(label.textContent || "");
+      const detail = /^(?:[+#-]|(?:id|risk|verification|type)\s*:)/i.test(value) ||
+        /(?:class|requirement|entity|erdiagram)/i.test(classTrail) &&
+          /(?:\s|:)/.test(value);
+      const anchor = detail ? "start" : "middle";
+      const x = detail ? bounds.x + 7 : bounds.x + bounds.width / 2;
+      label.setAttribute("x", String(x));
+      label.setAttribute("text-anchor", anchor);
+      setSvgInlineStyleProperty(label, "text-anchor", anchor);
+    });
+  }
+
+  function collectSvgClassTrail(element) {
+    const parts = [];
+    let current = element;
+    while (current && current.tagName && current.tagName.toLowerCase() !== "svg") {
+      const className = ensureString(current.getAttribute && current.getAttribute("class"));
+      if (className) {
+        parts.push(className);
+      }
+      current = current.parentElement;
+    }
+    return parts.join(" ");
+  }
+
+  function findMermaidTextContainerBounds(label) {
+    const y = Number(label.getAttribute("y"));
+    if (!Number.isFinite(y)) {
+      return null;
+    }
+    let group = label.parentElement;
+    while (group && group.tagName && group.tagName.toLowerCase() !== "svg") {
+      const candidates = Array.from(
+        group.querySelectorAll("rect, polygon, ellipse, circle"),
+      )
+        .map(getSvgShapeBounds)
+        .filter(Boolean)
+        .filter((bounds) => y >= bounds.y - 8 && y <= bounds.y + bounds.height + 8);
+      if (candidates.length) {
+        candidates.sort((left, right) =>
+          left.width * left.height - right.width * right.height,
+        );
+        return candidates[0];
+      }
+      group = group.parentElement;
+    }
+    return null;
+  }
+
+  function getSvgShapeBounds(shape) {
+    const tagName = shape && shape.tagName && shape.tagName.toLowerCase();
+    if (tagName === "rect") {
+      const width = Number(shape.getAttribute("width"));
+      const height = Number(shape.getAttribute("height"));
+      const x = Number(shape.getAttribute("x")) || 0;
+      const y = Number(shape.getAttribute("y")) || 0;
+      return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+        ? { x, y, width, height }
+        : null;
+    }
+    if (tagName === "circle" || tagName === "ellipse") {
+      const radiusX = Number(shape.getAttribute(tagName === "circle" ? "r" : "rx"));
+      const radiusY = Number(shape.getAttribute(tagName === "circle" ? "r" : "ry"));
+      const centerX = Number(shape.getAttribute("cx"));
+      const centerY = Number(shape.getAttribute("cy"));
+      return [radiusX, radiusY, centerX, centerY].every(Number.isFinite)
+        ? {
+          x: centerX - radiusX,
+          y: centerY - radiusY,
+          width: radiusX * 2,
+          height: radiusY * 2,
+        }
+        : null;
+    }
+    return null;
+  }
+
+  function setSvgInlineStyleProperty(element, property, value) {
+    const style = ensureString(element.getAttribute("style"))
+      .replace(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*[^;]*`, "gi"), "")
+      .replace(/;+$/g, "");
+    element.setAttribute("style", `${style}${style ? ";" : ""}${property}:${value}`);
+  }
+
+  function normalizeMermaidNodeShapesForPdf(svg, stroke) {
+    svg.querySelectorAll(".node").forEach((node) => {
+      // Preserve solid unlabeled markers; render labeled nodes as print-friendly outlines.
+      if (!normalizeText(node.textContent || "")) {
+        return;
+      }
+      node
+        .querySelectorAll(".label-container, rect, polygon, circle, ellipse, path")
+        .forEach((shape) => {
+          shape.setAttribute(
+            "style",
+            `fill:none;stroke:${stroke};stroke-width:1.6`,
+          );
+        });
+    });
+  }
+
+  function normalizeMermaidGanttForPdf(svg, stroke, text) {
+    // Reapply essential Gantt styles because the source stylesheet is unavailable in PDF rendering.
+    svg.querySelectorAll(".section, .section rect, rect.section").forEach((section) => {
+      section.setAttribute("style", `fill:#f8fafc;stroke:#cbd5e1;stroke-width:0.7`);
+    });
+    svg.querySelectorAll(".task, .task rect, rect.task").forEach((task) => {
+      const className = ensureString(task.getAttribute("class"));
+      const fill = /task1\b/.test(className) ? "#dbeafe" : "#e2e8f0";
+      task.setAttribute("style", `fill:${fill};stroke:${stroke};stroke-width:0.8`);
+    });
+    svg.querySelectorAll(".grid line, .tick line, .today line").forEach((line) => {
+      line.setAttribute("style", "stroke:#94a3b8;stroke-width:0.6");
+    });
+    svg.querySelectorAll(".taskText, .sectionTitle, .titleText, .tick text").forEach((label) => {
+      label.setAttribute("fill", text);
+      label.setAttribute("style", "fill:#111827;font-family:Arial,sans-serif");
+    });
+  }
+
+  function normalizeMermaidJourneyForPdf(svg, stroke, text) {
+    // Keep journey task cards light to preserve label and emoji contrast.
+    svg.querySelectorAll(".task, .task rect, rect.task").forEach((task) => {
+      task.setAttribute("fill", "none");
+      task.setAttribute("style", `fill:none;stroke:${stroke};stroke-width:1`);
+    });
+    svg.querySelectorAll(".face, text.face, [class*='face' i]").forEach((face) => {
+      face.setAttribute("fill", "#ffffff");
+      setSvgInlineStyleProperty(face, "fill", "#ffffff");
+    });
+    svg.querySelectorAll("text").forEach((label) => {
+      if (!/(?:journey|task|section)/i.test(collectSvgClassTrail(label))) {
+        return;
+      }
+      label.setAttribute("fill", text);
+      setSvgInlineStyleProperty(label, "fill", text);
+    });
+  }
+
+  function normalizeMermaidMindmapForPdf(svg, stroke) {
+    const explicitNodes = Array.from(
+      svg.querySelectorAll(".mindmap-node, g[class*='mindmap-node' i]"),
+    );
+    // Some Mermaid mindmaps expose generic node groups without explicit classes.
+    const inferredNodes = Array.from(svg.querySelectorAll("g")).filter((group) => {
+      if (explicitNodes.includes(group) || !normalizeText(group.textContent || "")) {
+        return false;
+      }
+      return Boolean(group.querySelector(":scope > rect, :scope > polygon, :scope > ellipse"));
+    });
+    const nodes = [...new Set([...explicitNodes, ...inferredNodes])];
+    nodes.forEach((node) => {
+      node.querySelectorAll("rect, polygon, ellipse").forEach((shape) => {
+        shape.setAttribute("fill", "#f8fafc");
+        shape.setAttribute("style", `fill:#f8fafc;stroke:${stroke};stroke-width:1.2`);
+      });
+      // Keep connectors behind node cards while preserving labels above them.
+      if (node.parentElement) {
+        node.parentElement.appendChild(node);
+      }
+    });
+  }
+
+  function normalizeMermaidPieForPdf(svg, viewBox, text) {
+    const sourceX = viewBox.length === 4 && Number.isFinite(viewBox[0])
+      ? viewBox[0]
+      : 0;
+    const sourceWidth = viewBox.length === 4 && viewBox[2] > 0
+      ? viewBox[2]
+      : 0;
+    const centerX = sourceX + sourceWidth / 2;
+    const palette = ["#2563eb", "#d97757", "#7c3aed", "#0f766e", "#ca8a04", "#475569"];
+    Array.from(
+      svg.querySelectorAll("path.pieCircle, .pieCircle path, path[class*='pieSlice']"),
+    ).forEach((sector, index) => {
+      sector.setAttribute(
+        "style",
+        `fill:${palette[index % palette.length]};stroke:#ffffff;stroke-width:1`,
+      );
+    });
+    const legendLabels = Array.from(svg.querySelectorAll("text")).filter((label) => {
+      const value = normalizeText(label.textContent || "");
+      return /\[[^\]]+\]/.test(value) && !/^\d+(?:[.,]\d+)?\s*%$/.test(value);
+    });
+    legendLabels.forEach((label, index) => {
+      const x = Number(label.getAttribute("x"));
+      const y = Number(label.getAttribute("y"));
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return;
+      }
+      const fill = palette[index % palette.length];
+      const nearbyBox = Array.from(svg.querySelectorAll("rect")).find((box) => {
+        const bounds = getSvgShapeBounds(box);
+        return bounds && bounds.x < x && Math.abs(bounds.y + bounds.height / 2 - y) < 12;
+      });
+      if (nearbyBox) {
+        nearbyBox.setAttribute("style", `fill:${fill};stroke:${fill};stroke-width:1`);
+      } else {
+        const box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        box.setAttribute("x", String(x - 25));
+        box.setAttribute("y", String(y - 11));
+        box.setAttribute("width", "16");
+        box.setAttribute("height", "16");
+        box.setAttribute("style", `fill:${fill};stroke:${fill};stroke-width:1`);
+        label.parentElement.insertBefore(box, label);
+      }
+    });
+    svg.querySelectorAll("text").forEach((label) => {
+      const value = normalizeText(label.textContent || "");
+      if (/^\d+(?:[.,]\d+)?\s*%$/.test(value)) {
+        label.setAttribute("fill", "#ffffff");
+        label.setAttribute(
+          "style",
+          "fill:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:600",
+        );
+      }
+    });
+    if (!Number.isFinite(centerX) || !sourceWidth) {
+      return;
+    }
+    svg
+      .querySelectorAll(".pieTitleText, .titleText, text[class*='title'], text[class*='Title']")
+      .forEach((title) => {
+        title.setAttribute("x", String(centerX));
+        title.setAttribute("text-anchor", "middle");
+        title.setAttribute("fill", text);
+        title.setAttribute(
+          "style",
+          "fill:#111827;font-family:Arial,sans-serif;font-size:16px;text-anchor:middle",
+        );
+      });
+  }
+
+  function getSvgInlineStyleValue(style, property) {
+    const expression = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, "i");
+    const match = ensureString(style).match(expression);
+    return match ? ensureString(match[1]).trim() : "";
+  }
+
+  function normalizeMermaidSequenceArrowDirections(svg) {
+    svg.querySelectorAll("line[marker-end]").forEach((line) => {
+      const x1 = Number(line.getAttribute("x1"));
+      const x2 = Number(line.getAttribute("x2"));
+      const y2 = Number(line.getAttribute("y2"));
+      if (
+        !Number.isFinite(x1) ||
+        !Number.isFinite(x2) ||
+        !Number.isFinite(y2) ||
+        x2 >= x1
+      ) {
+        return;
+      }
+      // Use an explicit arrowhead because pdfMake may ignore SVG marker orientation.
+      line.removeAttribute("marker-end");
+      const size = 9;
+      const arrow = svg.ownerDocument.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path",
+      );
+      arrow.setAttribute(
+        "d",
+        `M ${x2} ${y2} L ${x2 + size} ${y2 - size / 2} L ${x2 + size} ${y2 + size / 2} z`,
+      );
+      arrow.setAttribute("style", "fill:#334155;stroke:#334155;stroke-width:1");
+      svg.appendChild(arrow);
+    });
+  }
+
+  function buildPdfMathNode(node) {
+    const math = getPdfKatexNode(node);
+    if (!math) {
+      return null;
+    }
+    const tex = extractLatexFromNode(math);
+    const isDisplay = isPdfDisplayMathNode(node, math);
+    // Preserve matrix structure and delimiters through SVG rendering.
+    const matrixSvg = isDisplay ? buildPdfMathMatrixSvg(math) : null;
+    if (matrixSvg) {
+      return matrixSvg;
+    }
+    // Preserve row structure for multi-line MathML equations.
+    const mathTable = buildPdfMathMlTable(math);
+    if (mathTable) {
+      return mathTable;
+    }
+    // Use SVG to preserve fraction bars in display equations.
+    const fractionSvg = isDisplay ? buildPdfMathFractionSvg(math) : null;
+    if (fractionSvg) {
+      return fractionSvg;
+    }
+    const text = normalizePdfMathText(tex, math);
+    const mathContent = buildPdfMathMlContent(math);
+    if (!text && !mathContent.length) {
+      return null;
+    }
+    const isBoxed = /\\(?:boxed|fbox)\s*\{/i.test(tex);
+    if (isBoxed) {
+      const boxedContent = {
+        table: {
+          widths: ["auto"],
+          body: [
+            [
+              {
+                text: mathContent.length ? mathContent : formatPdfTextWithEmoji(text),
+                fontSize: 11,
+                alignment: "center",
+                noWrap: false,
+              },
+            ],
+          ],
+        },
+        layout: {
+          hLineWidth: () => 0.7,
+          vLineWidth: () => 0.7,
+          hLineColor: () => "#475569",
+          vLineColor: () => "#475569",
+          paddingLeft: () => 7,
+          paddingRight: () => 7,
+          paddingTop: () => 4,
+          paddingBottom: () => 4,
+        },
+      };
+      return {
+        table: {
+          widths: ["*", "auto", "*"],
+          body: [[{ text: "" }, boxedContent, { text: "" }]],
+        },
+        layout: {
+          hLineWidth: () => 0,
+          vLineWidth: () => 0,
+          paddingLeft: () => 0,
+          paddingRight: () => 0,
+          paddingTop: () => 0,
+          paddingBottom: () => 0,
+        },
+        margin: isDisplay ? [0, 5, 0, 7] : [2, 0, 2, 0],
+      };
+    }
+    return {
+      text: mathContent.length ? mathContent : formatPdfTextWithEmoji(text),
+      fontSize: isDisplay ? 11 : undefined,
+      alignment: isDisplay ? "center" : undefined,
+      margin: isDisplay ? [0, 4, 0, 6] : undefined,
+      preserveLeadingSpaces: true,
+    };
+  }
+
+  function buildPdfMathFractionSvg(katexNode) {
+    const mathRoot = katexNode && katexNode.querySelector &&
+      katexNode.querySelector(".katex-mathml math");
+    if (!mathRoot) {
+      return null;
+    }
+    const semantics = Array.from(mathRoot.children).find(
+      (child) => child.tagName && child.tagName.toLowerCase() !== "annotation",
+    );
+    const expression = semantics || mathRoot;
+    const children = Array.from(expression.children || []).filter(
+      (child) => child.tagName && child.tagName.toLowerCase() !== "annotation",
+    );
+    const fractionIndex = children.findIndex(
+      (child) => child.tagName && child.tagName.toLowerCase() === "mfrac",
+    );
+    const fraction = fractionIndex >= 0
+      ? children[fractionIndex]
+      : expression.tagName && expression.tagName.toLowerCase() === "mfrac"
+        ? expression
+        : null;
+    if (!fraction || fraction.children.length < 2) {
+      return null;
+    }
+    const numerator = extractPdfMathMlText(fraction.children[0]);
+    const denominator = extractPdfMathMlText(fraction.children[1]);
+    if (!numerator || !denominator) {
+      return null;
+    }
+    const before = fractionIndex >= 0
+      ? children.slice(0, fractionIndex).map(extractPdfMathMlText).join("")
+      : "";
+    const after = fractionIndex >= 0
+      ? children.slice(fractionIndex + 1).map(extractPdfMathMlText).join("")
+      : "";
+    const fontSize = 15;
+    const textWidth = (value, size) => Math.max(size * 0.52, ensureString(value).length * size * 0.58);
+    const numeratorWidth = textWidth(numerator, 11);
+    const denominatorWidth = textWidth(denominator, 11);
+    const fractionWidth = Math.max(numeratorWidth, denominatorWidth) + 16;
+    const beforeWidth = before ? textWidth(before, fontSize) + 5 : 0;
+    const afterWidth = after ? textWidth(after, fontSize) + 5 : 0;
+    const width = Math.max(64, Math.ceil(beforeWidth + fractionWidth + afterWidth));
+    const fractionCenter = beforeWidth + fractionWidth / 2;
+    const escapedBefore = escapeHtml(before);
+    const escapedAfter = escapeHtml(after);
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="48" viewBox="0 0 ${width} 48">`,
+      `<text x="0" y="30" font-family="Arial, sans-serif" font-size="${fontSize}" fill="#111827">${escapedBefore}</text>`,
+      `<text x="${fractionCenter}" y="14" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#111827">${escapeHtml(numerator)}</text>`,
+      `<line x1="${beforeWidth + 3}" y1="22" x2="${beforeWidth + fractionWidth - 3}" y2="22" stroke="#111827" stroke-width="1"/>`,
+      `<text x="${fractionCenter}" y="39" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#111827">${escapeHtml(denominator)}</text>`,
+      `<text x="${beforeWidth + fractionWidth + 3}" y="30" font-family="Arial, sans-serif" font-size="${fontSize}" fill="#111827">${escapedAfter}</text>`,
+      "</svg>",
+    ].join("");
+    return {
+      svg,
+      width: Math.min(PDF_CONTENT_WIDTH_PT, width),
+      alignment: "center",
+      margin: [0, 4, 0, 6],
+    };
+  }
+
+  function buildPdfMathMatrixSvg(katexNode) {
+    const mathRoot = katexNode && katexNode.querySelector &&
+      katexNode.querySelector(".katex-mathml math");
+    if (!mathRoot) {
+      return null;
+    }
+    const semantics = Array.from(mathRoot.children).find(
+      (child) => child.tagName && child.tagName.toLowerCase() !== "annotation",
+    );
+    const expression = semantics || mathRoot;
+    const parts = collectPdfMathMatrixSequence(expression);
+    const matrixParts = parts.map(getPdfMathMatrixPart).filter(Boolean);
+    if (!matrixParts.length) {
+      return null;
+    }
+    const baseline = 41;
+    const rowHeight = 18;
+    let cursor = 2;
+    let markup = "";
+    parts.forEach((part) => {
+      const matrix = getPdfMathMatrixPart(part);
+      if (!matrix) {
+        const value = extractPdfMathMlText(part);
+        if (!value) {
+          return;
+        }
+        markup += `<text x="${cursor}" y="${baseline}" font-family="Arial, sans-serif" font-size="16" fill="#111827">${escapeHtml(value)}</text>`;
+        cursor += Math.max(10, value.length * 9) + 6;
+        return;
+      }
+      const columns = Math.max(1, ...matrix.rows.map((row) => row.length));
+      const cellWidths = Array.from({ length: columns }, (_, column) => {
+        return Math.max(
+          14,
+          ...matrix.rows.map((row) => Math.max(0, ensureString(row[column]).length) * 8),
+        );
+      });
+      const contentWidth = cellWidths.reduce((total, width) => total + width, 0) +
+        Math.max(0, columns - 1) * 11;
+      const matrixHeight = Math.max(rowHeight, matrix.rows.length * rowHeight);
+      const top = baseline - matrixHeight / 2 - 3;
+      const leftFence = matrix.leftFence;
+      const rightFence = matrix.rightFence;
+      const fenceSize = Math.max(22, matrixHeight + 8);
+      const leftInset = leftFence ? 12 : 0;
+      if (leftFence) {
+        markup += `<text x="${cursor}" y="${baseline + 7}" font-family="Arial, sans-serif" font-size="${fenceSize}" fill="#111827">${escapeHtml(leftFence)}</text>`;
+      }
+      let cellX = cursor + leftInset;
+      matrix.rows.forEach((row, rowIndex) => {
+        let currentX = cellX;
+        row.forEach((value, columnIndex) => {
+          const width = cellWidths[columnIndex];
+          markup += `<text x="${currentX + width / 2}" y="${top + 15 + rowIndex * rowHeight}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827">${escapeHtml(value)}</text>`;
+          currentX += width + 11;
+        });
+      });
+      const rightX = cursor + leftInset + contentWidth + 2;
+      if (rightFence) {
+        markup += `<text x="${rightX}" y="${baseline + 7}" font-family="Arial, sans-serif" font-size="${fenceSize}" fill="#111827">${escapeHtml(rightFence)}</text>`;
+      }
+      cursor = rightX + (rightFence ? 14 : 4);
+    });
+    const width = Math.max(72, Math.ceil(cursor + 2));
+    return {
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="74" viewBox="0 0 ${width} 74">${markup}</svg>`,
+      width: Math.min(PDF_CONTENT_WIDTH_PT, width),
+      alignment: "center",
+      margin: [0, 4, 0, 6],
+    };
+  }
+
+  function collectPdfMathMatrixSequence(element) {
+    const parts = [];
+    const visit = (current) => {
+      if (!current || !current.tagName) {
+        return;
+      }
+      if (getPdfMathMatrixPart(current)) {
+        parts.push(current);
+        return;
+      }
+      const tag = current.tagName.toLowerCase();
+      if (["math", "semantics", "mrow", "mstyle"].includes(tag)) {
+        Array.from(current.children || []).forEach((child) => {
+          if (child.tagName && child.tagName.toLowerCase() !== "annotation") {
+            visit(child);
+          }
+        });
+        return;
+      }
+      parts.push(current);
+    };
+    visit(element);
+    return parts;
+  }
+
+  function getPdfMathMatrixPart(element) {
+    if (!element || !element.tagName) {
+      return null;
+    }
+    const children = Array.from(element.children || []);
+    const table = children.find(
+      (child) => child.tagName && child.tagName.toLowerCase() === "mtable",
+    );
+    if (!table) {
+      return null;
+    }
+    const fenceValues = children
+      .filter((child) => child.tagName && child.tagName.toLowerCase() === "mo")
+      .map((child) => normalizeText(child.textContent || ""))
+      .filter((value) => /^[([{⟨⟪{|‖]|[\])}⟩⟫|‖]$/.test(value));
+    const rows = Array.from(table.children || [])
+      .filter((row) => row.tagName && row.tagName.toLowerCase() === "mtr")
+      .map((row) => Array.from(row.children || [])
+        .filter((cell) => cell.tagName && cell.tagName.toLowerCase() === "mtd")
+        .map(extractPdfMathMlText));
+    if (!rows.length) {
+      return null;
+    }
+    return {
+      leftFence: fenceValues.find((value) => /^[([{⟨⟪{|‖]$/.test(value)) || "",
+      rightFence: fenceValues.find((value) => /^[\])}⟩⟫|‖]$/.test(value)) || "",
+      rows,
+    };
+  }
+
+  function extractPdfMathMlText(element) {
+    if (!element || element.nodeType !== 1) {
+      return "";
+    }
+    const tag = element.tagName.toLowerCase();
+    const children = Array.from(element.children || []).filter(
+      (child) => child.tagName && child.tagName.toLowerCase() !== "annotation",
+    );
+    const text = () => ensureString(element.textContent)
+      .replace(/[\u2009\u200A\u00A0]/g, " ");
+    if (["mi", "mn", "mo", "mtext"].includes(tag)) {
+      return text();
+    }
+    if (tag === "msup" && children.length >= 2) {
+      return `${extractPdfMathMlText(children[0])}${toPdfSuperscript(extractPdfMathMlText(children[1]))}`;
+    }
+    if (tag === "msub" && children.length >= 2) {
+      return `${extractPdfMathMlText(children[0])}${toPdfSubscript(extractPdfMathMlText(children[1]))}`;
+    }
+    if (tag === "msubsup" && children.length >= 3) {
+      return `${extractPdfMathMlText(children[0])}${toPdfSubscript(extractPdfMathMlText(children[1]))}${toPdfSuperscript(extractPdfMathMlText(children[2]))}`;
+    }
+    if (tag === "mfrac" && children.length >= 2) {
+      return `${extractPdfMathMlText(children[0])}/${extractPdfMathMlText(children[1])}`;
+    }
+    if (tag === "msqrt") {
+      return `√${children.map(extractPdfMathMlText).join("")}`;
+    }
+    return children.length ? children.map(extractPdfMathMlText).join("") : text();
+  }
+
+  function toPdfSuperscript(value) {
+    const superscripts = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "+": "⁺", "-": "⁻", "=": "⁼", "(": "⁽", ")": "⁾", n: "ⁿ", i: "ⁱ" };
+    return Array.from(ensureString(value)).map((char) => superscripts[char] || char).join("");
+  }
+
+  function toPdfSubscript(value) {
+    const subscripts = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉", "+": "₊", "-": "₋", "=": "₌", "(": "₍", ")": "₎", a: "ₐ", e: "ₑ", h: "ₕ", i: "ᵢ", j: "ⱼ", k: "ₖ", l: "ₗ", m: "ₘ", n: "ₙ", o: "ₒ", p: "ₚ", r: "ᵣ", s: "ₛ", t: "ₜ", u: "ᵤ", v: "ᵥ", x: "ₓ" };
+    return Array.from(ensureString(value)).map((char) => subscripts[char] || char).join("");
+  }
+
+  function buildPdfMathMlTable(katexNode) {
+    const mathRoot = katexNode && katexNode.querySelector &&
+      katexNode.querySelector(".katex-mathml math");
+    const table = mathRoot && mathRoot.querySelector && mathRoot.querySelector("mtable");
+    if (!table) {
+      return null;
+    }
+    const rows = Array.from(table.children).filter(
+      (row) => row.tagName && row.tagName.toLowerCase() === "mtr",
+    );
+    const body = rows.map((row) => {
+      const cells = Array.from(row.children).filter((cell) => {
+        if (!cell.tagName || cell.tagName.toLowerCase() !== "mtd") {
+          return false;
+        }
+        return !cell.classList.contains("mtr-glue") &&
+          !cell.classList.contains("mml-eqn-num");
+      });
+      const left = cells[0] ? buildPdfMathMlTokens(cells[0]) : [];
+      const right = cells[1] ? buildPdfMathMlTokens(cells[1]) : [];
+      // Keep a second empty column so MathML rows share a stable PDF layout.
+      return [
+        {
+          text: left,
+          alignment: "right",
+          lineHeight: 1.12,
+          noWrap: true,
+        },
+        {
+          text: right,
+          alignment: "left",
+          lineHeight: 1.12,
+          noWrap: true,
+        },
+      ];
+    });
+    if (!body.length) {
+      return null;
+    }
+    return {
+      table: {
+        widths: ["auto", "auto"],
+        body,
+      },
+      layout: {
+        hLineWidth: () => 0,
+        vLineWidth: () => 0,
+        paddingLeft: (column) => (column === 0 ? 0 : 3),
+        paddingRight: (column) => (column === 0 ? 3 : 0),
+        paddingTop: () => 1.5,
+        paddingBottom: () => 1.5,
+      },
+      fontSize: 11,
+      alignment: "center",
+      margin: [0, 4, 0, 6],
+      dontBreakRows: true,
+    };
+  }
+
+  function buildPdfMathMlContent(katexNode) {
+    const mathRoot = katexNode && katexNode.querySelector &&
+      katexNode.querySelector(".katex-mathml math");
+    if (!mathRoot) {
+      return [];
+    }
+    const semantics = Array.from(mathRoot.children).find(
+      (child) => child.tagName && child.tagName.toLowerCase() !== "annotation",
+    );
+    return buildPdfMathMlTokens(semantics || mathRoot);
+  }
+
+  function buildPdfMathMlTokens(element) {
+    if (!element || element.nodeType !== 1) {
+      return [];
+    }
+    const tag = element.tagName.toLowerCase();
+    const children = Array.from(element.children).filter(
+      (child) => child.tagName.toLowerCase() !== "annotation",
+    );
+    const joinChildren = () => children.flatMap(buildPdfMathMlTokens);
+    const inlineText = () => ensureString(element.textContent)
+      .replace(/[\u2009\u200A\u00A0]/g, " ");
+    const token = (value, properties) => {
+      const text = ensureString(value);
+      return text ? [Object.assign({ text: text }, properties || {})] : [];
+    };
+
+    if (tag === "semantics" || tag === "math" || tag === "mrow" || tag === "mstyle") {
+      return joinChildren();
+    }
+    if (tag === "mi") {
+      return token(inlineText(), {
+        italics: element.getAttribute("mathvariant") !== "normal",
+      });
+    }
+    if (tag === "mn" || tag === "mo" || tag === "mtext") {
+      return token(inlineText());
+    }
+    if (tag === "msup" && children.length >= 2) {
+      return buildPdfMathMlTokens(children[0]).concat(
+        buildPdfMathMlScriptTokens(children[1], "sup"),
+      );
+    }
+    if (tag === "msub" && children.length >= 2) {
+      return buildPdfMathMlTokens(children[0]).concat(
+        buildPdfMathMlScriptTokens(children[1], "sub"),
+      );
+    }
+    if (tag === "msubsup" && children.length >= 3) {
+      return buildPdfMathMlTokens(children[0])
+        .concat(buildPdfMathMlScriptTokens(children[1], "sub"))
+        .concat(buildPdfMathMlScriptTokens(children[2], "sup"));
+    }
+    if (tag === "mfrac" && children.length >= 2) {
+      // Use a fraction slash because pdfMake rich text has no inline fraction primitive.
+      return token("(")
+        .concat(buildPdfMathMlScriptTokens(children[0], "sup"))
+        .concat(token("⁄"))
+        .concat(buildPdfMathMlScriptTokens(children[1], "sub"))
+        .concat(token(")"));
+    }
+    if (tag === "msqrt") {
+      return token("√").concat(joinChildren());
+    }
+    if (tag === "mroot" && children.length >= 2) {
+      return token("√[")
+        .concat(buildPdfMathMlTokens(children[1]))
+        .concat(token("]"))
+        .concat(buildPdfMathMlTokens(children[0]));
+    }
+    if (tag === "mover" && children.length >= 2) {
+      const accent = ensureString(children[1].textContent).trim();
+      if (/^[→\u2192]$/.test(accent)) {
+        return buildPdfMathMlTokens(children[0]).concat(token("⃗"));
+      }
+      return buildPdfMathMlTokens(children[0]).concat(
+        buildPdfMathMlScriptTokens(children[1], "sup"),
+      );
+    }
+    if (tag === "munder" && children.length >= 2) {
+      return buildPdfMathMlTokens(children[0]).concat(
+        buildPdfMathMlScriptTokens(children[1], "sub"),
+      );
+    }
+    if (tag === "munderover" && children.length >= 3) {
+      return buildPdfMathMlTokens(children[0])
+        .concat(buildPdfMathMlScriptTokens(children[1], "sub"))
+        .concat(buildPdfMathMlScriptTokens(children[2], "sup"));
+    }
+    return children.length ? joinChildren() : token(inlineText());
+  }
+
+  function buildPdfMathMlScriptTokens(element, position) {
+    return buildPdfMathMlTokens(element).map((part) => {
+      const next = Object.assign({}, part, {
+        fontSize: 8,
+      });
+      next[position] = true;
+      return next;
+    });
+  }
+
+  function getPdfKatexNode(node) {
+    if (!node || !node.matches) {
+      return null;
+    }
+    if (node.matches(".katex-display, .katex")) {
+      return node.matches(".katex") ? node : node.querySelector(".katex");
+    }
+    if (
+      node.getAttribute("data-math-display") === "true" &&
+      node.querySelector
+    ) {
+      return node.querySelector(".katex");
+    }
+    return null;
+  }
+
+  function isPdfDisplayMathNode(node, math) {
+    return Boolean(
+      (node.matches && node.matches(".katex-display")) ||
+        node.getAttribute("data-math-display") === "true" ||
+        (math && math.closest && math.closest(".katex-display")),
+    );
+  }
+
+  function normalizePdfMathText(tex, math) {
+    const source = ensureString(tex).trim();
+    if (source) {
+      const symbols = {
+        alpha: "α",
+        beta: "β",
+        gamma: "γ",
+        delta: "δ",
+        epsilon: "ε",
+        theta: "θ",
+        lambda: "λ",
+        mu: "μ",
+        pi: "π",
+        rho: "ρ",
+        sigma: "σ",
+        phi: "φ",
+        omega: "ω",
+        Gamma: "Γ",
+        Delta: "Δ",
+        Theta: "Θ",
+        Lambda: "Λ",
+        Pi: "Π",
+        Sigma: "Σ",
+        Phi: "Φ",
+        Omega: "Ω",
+      };
+      return source
+        // Remove the \boxed wrapper before stripping braces from nested commands.
+        .replace(/\\(?:boxed|fbox)\s*\{/gi, "")
+        .replace(/\\text\s*\{([^{}]*)\}/gi, "$1")
+        .replace(/\\(?:quad|qquad|,|;|!|enspace|space)/g, " ")
+        .replace(/\\(?:left|right|displaystyle|textstyle)\b/g, "")
+        .replace(/\\equiv/g, "≡")
+        .replace(/\\leq?/g, "≤")
+        .replace(/\\geq?/g, "≥")
+        .replace(/\\times/g, "×")
+        .replace(/\\cdot/g, "·")
+        .replace(/\\([A-Za-z]+)\b/g, (match, command) => {
+          return Object.prototype.hasOwnProperty.call(symbols, command)
+            ? symbols[command]
+            : match;
+        })
+        .replace(/\\[{}]/g, "")
+        .replace(/[{}]/g, "")
+        .replace(/\^(-?)([0-9]+)/g, (match, minus, digits) => {
+          const superscripts = {
+            "0": "⁰",
+            "1": "¹",
+            "2": "²",
+            "3": "³",
+            "4": "⁴",
+            "5": "⁵",
+            "6": "⁶",
+            "7": "⁷",
+            "8": "⁸",
+            "9": "⁹",
+          };
+          const value = digits
+            .split("")
+            .map((digit) => superscripts[digit] || digit)
+            .join("");
+          return `${minus ? "⁻" : ""}${value}`;
+        })
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    const visual =
+      math && math.querySelector && math.querySelector(".katex-html");
+    return normalizeText((visual || math).textContent || "");
   }
 
   function parsePdfChildContent(node) {
@@ -10257,8 +13055,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       text: formatPdfTextWithEmoji(text),
       font: "monospace",
       fontSize: 9,
-      background: "#f6f8fa",
-      margin: [0, 6, 0, 6],
+      color: "#1e293b",
+      background: "#f8fafc",
+      margin: [0, 5, 0, 7],
       preserveLeadingSpaces: true,
     };
   }
@@ -10342,24 +13141,22 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       }
       return [part];
     });
-    const quoteContent = composeMixedPdfStack(
-      unwrappedForQuote,
-      node.textContent || "",
+    const quoteContent = compactPdfQuoteContent(
+      composeMixedPdfStack(unwrappedForQuote, node.textContent || ""),
     );
     return {
       table: {
-        widths: [0.01, "*"],
+        widths: [1.25, "*"],
         body: [
           [
             {
               text: "",
-              fillColor: "#e5e7eb",
+              fillColor: "#cbd5e1",
               border: [false, false, false, false],
             },
             {
               stack: quoteContent,
-              fillColor: "#f9fafb",
-              color: "#475569",
+              color: "#334155",
               border: [false, false, false, false],
             },
           ],
@@ -10368,13 +13165,63 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       layout: {
         hLineWidth: () => 0,
         vLineWidth: () => 0,
-        paddingLeft: (i) => (i === 0 ? 0 : 8),
-        paddingRight: () => 8,
-        paddingTop: () => 4,
-        paddingBottom: () => 4,
+        paddingLeft: (i) => (i === 0 ? 0 : 7),
+        paddingRight: () => 2,
+        paddingTop: () => 0,
+        paddingBottom: () => 0,
       },
-      margin: [6, 2, 0, 6],
+      margin: [5, 0, 0, 1],
     };
+  }
+
+  function compactPdfQuoteContent(parts) {
+    return (parts || []).map((part) => {
+      if (!part || typeof part !== "object") {
+        return part;
+      }
+      const next = Object.assign({}, part);
+      if (Object.prototype.hasOwnProperty.call(next, "text")) {
+        next.fontSize = Math.min(Number(next.fontSize) || 11, 11);
+        next.lineHeight = Math.min(
+          Number(next.lineHeight) || PDF_LIST_LINE_HEIGHT,
+          PDF_LIST_LINE_HEIGHT,
+        );
+      }
+      if (Array.isArray(next.margin)) {
+        const margin = next.margin.slice();
+        margin[1] = 0;
+        margin[3] = Math.min(Number(margin[3]) || 0, 1);
+        next.margin = margin;
+      }
+      if (Array.isArray(next.stack)) {
+        next.stack = compactPdfQuoteContent(next.stack);
+      }
+      if (next.table && Array.isArray(next.table.body)) {
+        next.table = Object.assign({}, next.table, {
+          body: next.table.body.map((row) =>
+            row.map((cell) => {
+              if (!cell || typeof cell !== "object") {
+                return cell;
+              }
+              const compactCell = Object.assign({}, cell);
+              if (Array.isArray(compactCell.stack)) {
+                compactCell.stack = compactPdfQuoteContent(compactCell.stack);
+              }
+              if (Array.isArray(compactCell.margin)) {
+                compactCell.margin = [
+                  compactCell.margin[0] || 0,
+                  0,
+                  compactCell.margin[2] || 0,
+                  0,
+                ];
+              }
+              return compactCell;
+            }),
+          ),
+        });
+      }
+      return next;
+    });
   }
 
   function isPlainPdfStack(part) {
@@ -10443,6 +13290,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       (className.includes("text-orange-500") ||
         className.includes("dark:text-orange-300"))
     );
+  }
+
+  function isPdfInlineCodeNode(node) {
+    if (!node || !node.getAttribute) {
+      return false;
+    }
+    if (ensureString(node.getAttribute("data-markdown-copy")) === "inline-code") {
+      return true;
+    }
+    return isGrokInlineCodeLikeElement(node);
   }
 
   function buildPdfImageNode(node) {
@@ -10533,60 +13390,146 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
 
     const start = getOrderedListStart(listNode);
+    const depth = getPdfListDepth(listNode);
     const listItems = items.map((li, index) => {
-      const marker = isOrdered ? `${start + index}.` : "•";
+      const marker = getPdfListMarker(li, start + index, isOrdered, depth);
       const stack = buildListItemStackFromNode(li);
-      return buildPdfSelectableListItem(marker, stack, isOrdered);
+      return buildPdfSelectableListItem(
+        marker,
+        stack,
+        isOrdered && !isPdfTaskListItem(li),
+        isPdfTaskListItem(li),
+      );
     });
 
     return {
       stack: listItems,
-      margin: [0, 2, 0, 2],
+      // Indent nested lists without adding vertical spacing.
+      margin: [depth ? 8 : 0, 0, 0, 0],
     };
   }
 
-  function buildPdfSelectableListItem(marker, stack, isOrdered) {
+  function getPdfListDepth(listNode) {
+    let depth = 0;
+    let current = listNode && listNode.parentElement;
+    while (current) {
+      if (current.tagName && current.tagName.toLowerCase() === "li") {
+        depth += 1;
+      }
+      current = current.parentElement;
+    }
+    return depth;
+  }
+
+  function getPdfListMarker(li, position, isOrdered, depth) {
+    if (isPdfTaskListItem(li)) {
+      // Use a textual task marker so different checkbox implementations render consistently in PDFs.
+      return getPdfTaskCheckboxState(li) ? "✓" : "□";
+    }
+    if (!isOrdered) {
+      return ["•", "◦", "▪"][Math.min(depth, 2)];
+    }
+    const style = depth % 3;
+    if (style === 1) {
+      return `${formatPdfAlphabeticListMarker(position)}.`;
+    }
+    if (style === 2) {
+      return `${formatPdfRomanListMarker(position)}.`;
+    }
+    return `${position}.`;
+  }
+
+  function isPdfTaskListItem(li) {
+    return Boolean(
+      li &&
+        ((li.classList && li.classList.contains("task-list-item")) ||
+          getPdfTaskCheckboxElement(li)),
+    );
+  }
+
+  function getPdfTaskCheckboxElement(li) {
+    if (!li || !li.querySelector) {
+      return null;
+    }
+    const directChildren = Array.from(li.children || []);
+    return (
+      directChildren.find((child) => {
+        if (!child || !child.tagName) {
+          return false;
+        }
+        if (
+          child.tagName.toLowerCase() === "input" &&
+          ensureString(child.getAttribute("type")).toLowerCase() === "checkbox"
+        ) {
+          return true;
+        }
+        return (
+          child.getAttribute("role") === "checkbox" &&
+          child.hasAttribute("aria-checked")
+        );
+      }) || li.querySelector('input[type="checkbox"], [role="checkbox"][aria-checked]')
+    );
+  }
+
+  function getPdfTaskCheckboxState(li) {
+    const checkbox = getPdfTaskCheckboxElement(li);
+    if (!checkbox) {
+      return false;
+    }
+    if (checkbox.tagName && checkbox.tagName.toLowerCase() === "input") {
+      return checkbox.checked || checkbox.hasAttribute("checked");
+    }
+    return ensureString(checkbox.getAttribute("aria-checked")).toLowerCase() === "true";
+  }
+
+  function formatPdfAlphabeticListMarker(value) {
+    let number = Math.max(1, Number(value) || 1);
+    let output = "";
+    while (number > 0) {
+      number -= 1;
+      output = String.fromCharCode(97 + (number % 26)) + output;
+      number = Math.floor(number / 26);
+    }
+    return output;
+  }
+
+  function formatPdfRomanListMarker(value) {
+    const entries = [
+      [1000, "m"], [900, "cm"], [500, "d"], [400, "cd"],
+      [100, "c"], [90, "xc"], [50, "l"], [40, "xl"],
+      [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"],
+    ];
+    let number = Math.max(1, Number(value) || 1);
+    let output = "";
+    entries.forEach(([unit, glyph]) => {
+      while (number >= unit) {
+        output += glyph;
+        number -= unit;
+      }
+    });
+    return output;
+  }
+
+  function buildPdfSelectableListItem(marker, stack, isOrdered, isTask) {
     const content = stack && stack.length ? stack : [{ text: "" }];
     const normalizedContent = content
       .map(normalizePdfSelectableListItemPart)
       .filter(Boolean);
     const hangingIndent = getPdfListHangingIndent(marker);
-    const first = normalizedContent[0] || { text: "" };
-    const rest = normalizedContent
-      .slice(1)
-      .map((entry) => addPdfListContinuationIndent(entry, hangingIndent));
-
-    if (isInlinePdfTextPart(first)) {
-      const firstLine = Object.assign({}, first, {
-        text: prefixPdfSelectableListText(marker, first.text, isOrdered),
-        fontSize: first.fontSize || 11,
-        lineHeight: first.lineHeight || 1.25,
-        noWrap: false,
-        margin: [hangingIndent, 0, 0, 0],
-        leadingIndent: -hangingIndent,
-      });
-      if (!rest.length) {
-        firstLine.margin = [hangingIndent, 0, 0, 1];
-        return firstLine;
-      }
-      return {
-        stack: [firstLine, ...rest],
-        margin: [0, 0, 0, 1],
-      };
-    }
-
+    // Nested lists use a marker column to avoid pdfMake height miscalculation.
     return {
-      stack: [
+      columns: [
         {
-          text: prefixPdfSelectableListText(marker, "", isOrdered),
-          fontSize: 11,
-          lineHeight: 1.25,
-          margin: [hangingIndent, 0, 0, 0],
-          leadingIndent: -hangingIndent,
+          width: hangingIndent,
+          text: buildPdfListMarkerPart(marker, isOrdered, isTask),
+          alignment: "right",
         },
-        addPdfListContinuationIndent(first, hangingIndent),
-        ...rest,
+        {
+          width: "*",
+          stack: normalizedContent.length ? normalizedContent : [{ text: "" }],
+        },
       ],
+      columnGap: 4,
       margin: [0, 0, 0, 1],
     };
   }
@@ -10600,37 +13543,20 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     return Object.assign({}, entry, {
       fontSize: entry.fontSize || 11,
-      lineHeight: entry.lineHeight || 1.25,
+      lineHeight: entry.lineHeight || PDF_LIST_LINE_HEIGHT,
       noWrap: false,
     });
   }
 
-  function prefixPdfSelectableListText(marker, textValue, isOrdered) {
-    const markerPart = {
-      text: `${marker} `,
+  function buildPdfListMarkerPart(marker, isOrdered, isTask) {
+    return {
+      text: marker,
       bold: Boolean(isOrdered),
-      color: "#334155",
-      fontSize: 11,
-      lineHeight: 1.25,
+      color: isTask ? "#64748b" : "#334155",
+      fontSize: isTask ? 9 : 11,
+      lineHeight: PDF_LIST_LINE_HEIGHT,
       noWrap: true,
     };
-    if (Array.isArray(textValue)) {
-      return [markerPart, ...textValue];
-    }
-    return [markerPart, { text: textValue || "" }];
-  }
-
-  function addPdfListContinuationIndent(entry, hangingIndent) {
-    if (!entry || typeof entry !== "object") {
-      return entry;
-    }
-    const next = Object.assign({}, entry);
-    const margin = Array.isArray(next.margin)
-      ? next.margin.slice()
-      : [0, 1, 0, 1];
-    margin[0] = Math.max(Number(margin[0]) || 0, hangingIndent);
-    next.margin = margin;
-    return next;
   }
 
   function getPdfListHangingIndent(marker) {
@@ -10653,6 +13579,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   function buildListItemStackFromNode(liNode) {
     const parts = [];
     Array.from(liNode.childNodes || []).forEach((child) => {
+      if (isPdfTaskControlNode(child)) {
+        return;
+      }
       const isParagraphNode =
         child &&
         child.nodeType === Node.ELEMENT_NODE &&
@@ -10687,6 +13616,22 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
     const mixed = composeMixedPdfStack(parts, liNode.textContent || "");
     return normalizeListItemStack(mixed);
+  }
+
+  function isPdfTaskControlNode(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE || !node.tagName) {
+      return false;
+    }
+    if (
+      node.tagName.toLowerCase() === "input" &&
+      ensureString(node.getAttribute("type")).toLowerCase() === "checkbox"
+    ) {
+      return true;
+    }
+    return (
+      node.getAttribute("role") === "checkbox" &&
+      node.hasAttribute("aria-checked")
+    );
   }
 
   function normalizeListItemStack(stack) {
@@ -10738,7 +13683,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       extractGrokCodeRichInlines(node) ||
       extractDeepSeekCodeRichInlines(node);
     const language = extractCodeBlockLanguage(node) || "Code";
-    const headerLabel = language;
+    // Keep language labels single-line to avoid extra PDF header rows.
+    const headerLabel = ensureString(language).replace(/\s+/g, " ").trim() || "Code";
     const printMode = Boolean(
       activePdfExportOptions && activePdfExportOptions.printMode,
     );
@@ -10750,19 +13696,20 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       ? {
         accent: "#cbd5e1",
         headerAccent: "#94a3b8",
-        headerFill: "#e2e8f0",
+        headerFill: "#e5e7eb",
         bodyFill: "#f8fafc",
         text: "#1f2937",
-        barWidth: 2,
+        barWidth: 1.5,
       }
       : {
-        accent: "#334155",
-        headerAccent: "#0ea5e9",
-        headerFill: "#0f172a",
-        bodyFill: "#1f2937",
+        accent: "#475569",
+        headerAccent: "#38bdf8",
+        headerFill: "#111827",
+        bodyFill: "#172033",
         text: "#f8fafc",
-        barWidth: 5,
+        barWidth: 3,
       };
+    // Use a single table for syntax-highlighted code to avoid fragmented inline backgrounds.
     return {
       table: {
         widths: [codeTheme.barWidth, "*"],
@@ -10792,6 +13739,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
               style: "codeBlockBody",
               color: codeTheme.text,
               preserveLeadingSpaces: true,
+              noWrap: false,
               fillColor: codeTheme.bodyFill,
               border: [false, false, false, false],
             },
@@ -10801,10 +13749,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       layout: {
         hLineWidth: () => 0,
         vLineWidth: () => 0,
-        paddingLeft: (i) => (i === 0 ? 0 : 12),
-        paddingRight: () => 12,
-        paddingTop: (i) => (i === 0 ? 8 : 10),
-        paddingBottom: (i) => (i === 0 ? 7 : 10),
+        paddingLeft: (index) => (index === 0 ? 0 : 10),
+        // Keep the accent strip at 3 pt; body-cell padding would make it too wide.
+        paddingRight: (index) => (index === 0 ? 0 : 10),
+        paddingTop: (index) => (index === 0 ? 5 : 9),
+        paddingBottom: (index) => (index === 0 ? 5 : 9),
       },
       margin: [0, 8, 0, 12],
     };
@@ -10960,13 +13909,23 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   ) {
     const activePalette = palette || PDF_CHATGPT_CODE_PALETTES.dark;
     const fallbackColor = inheritedColor || activePalette.default;
+    const category = resolveChatGptCodeTokenCategory(node, tokenCategories);
+    // Semantic syntax classes must take precedence over inherited text colors during export.
+    if (
+      category &&
+      /(?:text-codex-syntax|tok-|hljs-|\btoken\b)/i.test(
+        ensureString(node.className),
+      ) &&
+      activePalette[category]
+    ) {
+      return activePalette[category];
+    }
     const sourceColor = resolveInlineColorFromStyleAttr(node);
     if (sourceColor) {
       return (
         translateChatGptCodeColor(sourceColor, colorContext) || sourceColor
       );
     }
-    const category = resolveChatGptCodeTokenCategory(node, tokenCategories);
     return category && activePalette[category]
       ? activePalette[category]
       : fallbackColor;
@@ -11055,6 +14014,15 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return "";
     }
     const className = ensureString(node.className).toLowerCase();
+    // Preserve syntax classes without relying on host-page stylesheets.
+    if (/text-codex-syntax-keyword/.test(className)) return "keyword";
+    if (/text-codex-syntax-variable/.test(className)) return "identifier";
+    if (/text-codex-syntax-string/.test(className)) return "string";
+    if (/text-codex-syntax-literal/.test(className)) return "literal";
+    if (/text-codex-syntax-name/.test(className)) return "name";
+    if (/text-codex-syntax-attribute/.test(className)) return "attribute";
+    if (/text-codex-syntax-number/.test(className)) return "number";
+    if (/text-codex-syntax-comment/.test(className)) return "comment";
     if (/comment|tok-comment|hljs-comment/.test(className)) return "comment";
     if (/string|regexp|tok-string|hljs-string/.test(className)) return "string";
     if (/number|integer|float|tok-number|hljs-number/.test(className))
@@ -11957,6 +14925,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return false;
     }
     const className = ensureString(node.className);
+    if (platform === "chatgpt" && node.matches('[data-code-block="true"]')) {
+      return true;
+    }
     if (node.matches('div[data-testid="code-block"]')) {
       return true; // Grok
     }
@@ -11978,7 +14949,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     if (
       platform === "chatgpt" &&
-      node.matches('[data-testid*="code-block"], div[class*="code-block"]') &&
+      node.matches('[data-testid*="code-block"], div[class*="code-block" i], div[class*="CodeBlock"]') &&
       node.querySelector("pre, code, .cm-content")
     ) {
       return true; // ChatGPT code-block wrapper
@@ -12023,7 +14994,15 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function extractPlatformCodeBlockLanguage(node) {
     if (platform === "chatgpt") {
+      const preservedLanguage = normalizeText(
+        ensureString(node.getAttribute && node.getAttribute("data-omni-code-language")),
+      );
+      if (preservedLanguage) {
+        return preservedLanguage;
+      }
       return extractTextFromFirstNode(node, [
+        '[data-markdown-copy="exclude"] .min-w-0.flex-1.truncate',
+        '[data-markdown-copy="exclude"] [class*="truncate"]',
         "div.text-token-text-primary",
         ".text-token-text-primary",
       ]);
@@ -12087,25 +15066,19 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function extractLanguageFromCodeLabels(node) {
     const labels = Array.from(node.querySelectorAll("span, div"))
-      .filter((el) => !el.closest("pre, code, .cm-content, .cm-line"))
+      .filter(
+        (el) =>
+          !el.closest(
+            "pre, code, .cm-content, .cm-line, button, [role='button'], [data-code-block-controls], [data-markdown-copy='exclude']",
+          ),
+      )
       .map((el) => normalizeText(el.textContent || ""))
       .filter(Boolean);
     return labels.find(isUsableCodeLanguageLabel) || "";
   }
 
   function isUsableCodeLanguageLabel(label) {
-    const blocked = new Set([
-      "Copier",
-      "Copy",
-      "Envelopper",
-      "Wrap",
-      "Exécuter",
-      "Run",
-      "Download",
-      "Télécharger",
-    ]);
     return (
-      !blocked.has(label) &&
       label.length >= 2 &&
       label.length <= 24 &&
       /^[A-Za-z][A-Za-z0-9+#.\- ]*$/.test(label)
@@ -12126,7 +15099,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       querySelectorScoped(banner, ':scope [class*="d813de27"]'),
       querySelectorScoped(banner, ':scope [class*="code-info-language"]'),
       querySelectorScoped(banner, ":scope span:first-child"),
-    ].filter(Boolean);
+    ].filter(
+      (candidate) =>
+        candidate &&
+        !candidate.closest(
+          "button, [role='button'], [data-code-block-controls], [data-markdown-copy='exclude']",
+        ),
+    );
 
     for (const languageNode of languageNodes) {
       const value = normalizeDeepSeekLanguageLabel(
@@ -12153,10 +15132,12 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function normalizeDeepSeekLanguageLabel(value) {
-    const normalized = normalizeText(value || "")
-      .replace(/\b(Copy|Download|Copier|Télécharger)\b/gi, "")
-      .trim();
-    if (!normalized || /^(text|plain\s*text)$/i.test(normalized)) {
+    const normalized = normalizeText(value || "");
+    // Combined diagram tab labels are not valid language labels.
+    if (
+      !normalized ||
+      /^(text|plain\s*text|diagram|code|diagram\s*code)$/i.test(normalized)
+    ) {
       return "";
     }
     if (!/^[A-Za-z][A-Za-z0-9+#.\- ]{0,31}$/.test(normalized)) {
@@ -13065,6 +16046,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         message.sourceNode &&
         message.sourceNode.nodeType === Node.ELEMENT_NODE
       ) {
+        await primeChatGptVisualizationAssets(message.sourceNode);
         const sourceImages = buildSourceImageLookup(message.sourceNode);
         pdfNode = prepareNodeForExport(message.sourceNode);
         await inlinePdfImagesInNode(pdfNode, sourceImages);
@@ -13093,6 +16075,82 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return null;
     }
     await inlinePdfImagesInNode(container);
+    return container;
+  }
+
+  async function inlineBlobImagesForPortableExport(messages, session) {
+    const prepared = [];
+    for (const message of messages || []) {
+      throwIfExportCancelled(session);
+      const html = ensureString(message && message.html);
+      if (!/\bsrc\s*=\s*["']blob:/i.test(html)) {
+        prepared.push(message);
+        continue;
+      }
+
+      const sourceNode =
+        message &&
+        message.sourceNode &&
+        message.sourceNode.nodeType === Node.ELEMENT_NODE
+          ? message.sourceNode
+          : null;
+      const container = sourceNode
+        ? prepareNodeForExport(sourceNode)
+        : parseHtmlContainer(html);
+      if (!container) {
+        prepared.push(message);
+        continue;
+      }
+
+      await inlineBlobImagesInNode(
+        container,
+        sourceNode ? buildSourceImageLookup(sourceNode) : null,
+        session,
+      );
+      prepared.push(
+        Object.assign({}, message, {
+          html: cleanHtml(container),
+          sourceNode: null,
+        }),
+      );
+    }
+    return prepared;
+  }
+
+  async function inlineBlobImagesInNode(container, sourceImages, session) {
+    if (!container || !container.querySelectorAll) {
+      return container;
+    }
+    normalizeExportableImages(container);
+    const images = collectExportableImageElements(container);
+    for (const image of images) {
+      throwIfExportCancelled(session);
+      const src = normalizeImageSource(image);
+      if (!/^blob:/i.test(src)) {
+        continue;
+      }
+      try {
+        const dataUrl =
+          (await readBlobUrlAsDataUrl(src)) ||
+          (await convertLoadedImageElementToPngDataUrl(
+            resolveLiveImageForSource(src, sourceImages) || image,
+          ));
+        if (dataUrl) {
+          image.setAttribute("src", dataUrl);
+          image.removeAttribute("srcset");
+          image.removeAttribute("sizes");
+        } else {
+          image.removeAttribute("src");
+          image.removeAttribute("srcset");
+          image.removeAttribute("sizes");
+        }
+      } catch (err) {
+        console.warn("OmniChat: failed to inline portable image", src, err);
+        image.removeAttribute("src");
+        image.removeAttribute("srcset");
+        image.removeAttribute("sizes");
+      }
+    }
     return container;
   }
 
@@ -13127,13 +16185,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
             ensureString(err && err.message),
           )
         ) {
-          updatePdfExportLoader({
-            stage: "Preparing images...",
-            detail: `Image host blocked by userscript permissions: ${extractHostnameFromUrl(src)}.`,
-            progress: 0.86,
-            progressText: "Step 4 of 5",
-            indeterminate: false,
-          });
+          updatePdfExportLoader(
+            createPdfLoaderState(4, 0.86, {
+              detail: extractHostnameFromUrl(src),
+            }),
+          );
           await waitForNextPaint();
         }
       }
@@ -13308,6 +16364,23 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return await convertImageSrcToPngDataUrl(objectUrl);
     } finally {
       URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function readBlobUrlAsDataUrl(src) {
+    try {
+      const response = await fetch(src);
+      if (!response || !response.ok) {
+        return "";
+      }
+      const blob = await response.blob();
+      if (!blob || !blob.size || !/^image\//i.test(blob.type)) {
+        return "";
+      }
+      const dataUrl = await blobToDataUrl(blob);
+      return /^data:image\//i.test(dataUrl) ? dataUrl : "";
+    } catch (err) {
+      return "";
     }
   }
 
@@ -13702,7 +16775,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       containsEmoji: containsEmoji,
     };
 
-    console.info("OmniChat PDF language detection:", {
+    console.debug("OmniChat PDF language detection:", {
       mainLanguage: profile.mainLanguage,
       detectedLanguages: profile.detectedLanguages,
       detectedScripts: profile.detectedScripts,
@@ -13731,6 +16804,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)
       ) {
         detectedScripts.add("latin");
+      }
+      if (/[^\u0000-\u007F]/u.test(segment) && PDF_SCRIPT_DETECTION_PATTERNS.latinExtended.test(segment)) {
+        detectedScripts.add("latinExtended");
+      }
+      if (PDF_LATIN_COMBINING_MARK_PATTERN.test(segment)) {
+        // Route combining overlays through Noto Sans for reliable glyph coverage.
+        detectedScripts.add("latinExtended");
+      }
+      if (PDF_MATH_SYMBOL_PATTERN.test(segment)) {
+        detectedScripts.add("math");
       }
       if (
         containsPdfSymbolTextNeedingSymbolsFont(
@@ -13862,30 +16945,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     return "und";
   }
 
-  function formatPdfDetectionSummary(languageProfile) {
-    if (!languageProfile || typeof languageProfile !== "object") {
-      return "Using local language and script detection.";
-    }
-    const languages = Array.isArray(languageProfile.detectedLanguages)
-      ? languageProfile.detectedLanguages.filter(Boolean)
-      : [];
-    const scripts = Array.isArray(languageProfile.detectedScripts)
-      ? languageProfile.detectedScripts.filter(Boolean)
-      : [];
-    const languageText = languages.length
-      ? languages.join(", ")
-      : ensureString(languageProfile.mainLanguage || "und");
-    const scriptText = scripts.length ? scripts.join(", ") : "latin";
-    return `Main language: ${ensureString(languageProfile.mainLanguage || "und")} | Languages: ${languageText} | Scripts: ${scriptText}`;
-  }
-
-  function formatPdfResourceLabel(resourceKey) {
-    if (PDF_SCRIPT_RESOURCE_LABELS[resourceKey]) {
-      return PDF_SCRIPT_RESOURCE_LABELS[resourceKey];
-    }
-    return `${ensureString(resourceKey || "PDF")} font`;
-  }
-
   function clonePdfFontContext(context) {
     if (!context || typeof context !== "object") {
       return null;
@@ -13960,7 +17019,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       plans.push({
         disabledScripts: [],
         disableEmojiFont: true,
-        detail: "Retrying PDF generation without the emoji font.",
+        detail: "",
       });
     }
     if (recommendedSafeScripts.length) {
@@ -13969,7 +17028,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         safeSegmentationScripts: existingSafeScripts.concat(
           recommendedSafeScripts,
         ),
-        detail: "Retrying PDF generation with safer complex-script layout.",
+        detail: "",
       });
     }
     const orderedScripts = PDF_SCRIPT_FONT_RETRY_ORDER.filter(
@@ -13982,14 +17041,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     plans.push(
       ...orderedScripts.map((script) => ({
         disabledScripts: [script],
-        detail: `Retrying PDF generation without ${formatPdfResourceLabel(script).toLowerCase()}.`,
+        detail: "",
       })),
     );
     if (availableScripts.length > 1) {
       plans.push({
         disabledScripts: availableScripts.slice(),
         disableEmojiFont: hasEmojiFont,
-        detail: "Retrying PDF generation without extra language fonts.",
+        detail: "",
       });
     }
     return plans;
@@ -14039,13 +17098,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const session = activeExportSession;
     throwIfExportCancelled(session);
     const options = normalizeExportOptions(selectedOptions);
-    updatePdfExportLoader({
-      stage: "Detecting languages and scripts...",
-      detail: "Analyzing the full chat locally before preparing the PDF.",
-      progress: 0.18,
-      progressText: "Step 2 of 5",
-      indeterminate: false,
-    });
+    updatePdfExportLoader(createPdfLoaderState(2, 0.18));
     await waitForNextPaint();
     const title = `${getPlatformLabel()} Export`;
     const conversationTitle = getExportConversationTitle();
@@ -14074,34 +17127,16 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       conversationTitle,
       metaLines.join("\n"),
     ]);
-    updatePdfExportLoader({
-      stage: "Detecting languages and scripts...",
-      detail: formatPdfDetectionSummary(languageProfile),
-      progress: 0.28,
-      progressText: "Step 2 of 5",
-      indeterminate: false,
-    });
+    updatePdfExportLoader(createPdfLoaderState(2, 0.28));
     await waitForNextPaint();
-    updatePdfExportLoader({
-      stage: "Loading PDF fonts...",
-      detail: formatPdfDetectionSummary(languageProfile),
-      progress: 0.34,
-      progressText: "Step 3 of 5",
-      indeterminate: false,
-    });
+    updatePdfExportLoader(createPdfLoaderState(3, 0.34));
     await waitForNextPaint();
     const fontName = await ensurePdfMakeFonts(pdfMakeInstance, languageProfile);
     throwIfExportCancelled(session);
     if (!fontName) {
       return false;
     }
-    updatePdfExportLoader({
-      stage: "Preparing images...",
-      detail: "Embedding generated images from the chat into the PDF document.",
-      progress: 0.86,
-      progressText: "Step 4 of 5",
-      indeterminate: false,
-    });
+    updatePdfExportLoader(createPdfLoaderState(4, 0.86));
     await waitForNextPaint();
     const pdfMessages = await prepareMessagesForPdfImages(messages);
     throwIfExportCancelled(session);
@@ -14250,6 +17285,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         defaultStyle: {
           font: fontName,
           fontSize: 10,
+          lineHeight: PDF_BODY_LINE_HEIGHT,
           color: "#0f172a",
         },
         footer: function (currentPage, pageCount) {
@@ -14286,13 +17322,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
           },
           meta: { fontSize: 9, color: "#64748b", margin: [0, 0, 0, 12] },
           role: { fontSize: 9, bold: true, margin: [0, 0, 0, 11] },
-          message: { fontSize: 11, lineHeight: 1.45 },
-          codeBlockHeader: { fontSize: 9, bold: true, color: "#f8fafc" },
+          message: { fontSize: 11, lineHeight: PDF_BODY_LINE_HEIGHT },
+          codeBlockHeader: { fontSize: 8.5, bold: true, color: "#f8fafc" },
           codeBlockBody: {
-            fontSize: 9,
+            fontSize: 8.5,
             color: "#f8fafc",
             font: "monospace",
-            lineHeight: 1.35,
+            lineHeight: PDF_CODE_LINE_HEIGHT,
           },
         },
       };
@@ -14315,23 +17351,12 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     };
 
     try {
-      updatePdfExportLoader({
-        stage: "Generating PDF...",
-        detail: "Finalizing layout and preparing the download.",
-        progress: 0.92,
-        progressText: "Step 5 of 5",
-        indeterminate: false,
-      });
+      updatePdfExportLoader(createPdfLoaderState(5, 0.92));
       await waitForNextPaint();
       await attemptPdfDownload(originalFontContext);
-      updatePdfExportLoader({
-        stage: "PDF export ready.",
-        detail:
-          "The document has been generated and the download has been triggered.",
-        progress: 1,
-        progressText: "Completed",
-        indeterminate: false,
-      });
+      updatePdfExportLoader(
+        createPdfLoaderState(5, 1, { completed: true, progressText: false }),
+      );
       await waitForNextPaint();
       return true;
     } catch (err) {
@@ -14342,22 +17367,22 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
         ? buildPdfFontFallbackPlans(originalFontContext)
         : [];
       if (fallbackPlans.length) {
-        console.info(
+        console.debug(
           `OmniChat PDF export: recoverable font layout issue, retrying with safer fallbacks (${formatRecoverablePdfFontError(err)}).`,
         );
         for (let index = 0; index < fallbackPlans.length; index += 1) {
           throwIfExportCancelled(session);
           const plan = fallbackPlans[index];
-          updatePdfExportLoader({
-            stage: "Generating PDF...",
-            detail: plan.detail,
-            progress: Math.min(
-              0.97,
-              0.93 + ((index + 1) / (fallbackPlans.length + 1)) * 0.04,
+          updatePdfExportLoader(
+            createPdfLoaderState(
+              5,
+              Math.min(
+                0.97,
+                0.93 + ((index + 1) / (fallbackPlans.length + 1)) * 0.04,
+              ),
+              { detail: plan.detail },
             ),
-            progressText: "Retrying with fallback fonts",
-            indeterminate: false,
-          });
+          );
           await waitForNextPaint();
           try {
             const retryContext = buildPdfFontContextVariant(
@@ -14367,21 +17392,19 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
               plan.disableEmojiFont,
             );
             await attemptPdfDownload(retryContext);
-            updatePdfExportLoader({
-              stage: "PDF export ready.",
-              detail:
-                "The PDF was generated after applying a safer font fallback.",
-              progress: 1,
-              progressText: "Completed",
-              indeterminate: false,
-            });
+            updatePdfExportLoader(
+              createPdfLoaderState(5, 1, {
+                completed: true,
+                progressText: false,
+              }),
+            );
             await waitForNextPaint();
             return true;
           } catch (retryErr) {
             if (isExportCancelledError(retryErr)) {
               throw createExportCancelledError();
             }
-            console.info(
+            console.debug(
               `OmniChat PDF export: fallback retry failed for ${plan.disabledScripts.join(", ") || "current fonts"} (${formatRecoverablePdfFontError(retryErr)}).`,
             );
           }
@@ -14561,14 +17584,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return rawTitle.replace(/\s*[-–]\s*DeepSeek.*$/i, "").trim();
     }
     if (platform === "gemini") {
-      const candidate =
-        ensureString(
-          document.querySelector('[aria-current="true"]')?.innerText,
-        ).trim() ||
-        ensureString(document.querySelector("h1")?.innerText).trim();
-      const geminiTitle =
-        candidate && candidate !== "Google Gemini" ? candidate : rawTitle;
-      return geminiTitle.trim();
+      return document.title
+        .replace(/\s*[-–]\s*(Google\s*)?Gemini\s*$/i, "")
+        .trim();
     }
     return "";
   }
@@ -14639,6 +17657,178 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       return "deepseek";
     }
     return null;
+  }
+
+  function isChatGptVisualizationSandboxHost(hostname) {
+    return /(?:^|\.)web-sandbox\.oaiusercontent\.com$/i.test(
+      ensureString(hostname),
+    ) && window.parent !== window;
+  }
+
+  function installChatGptVisualizationSandboxBridge() {
+    window.addEventListener("message", async (event) => {
+      const data = event && event.data;
+      if (!data || data.type !== "omnichat-exporter:visualization-request" ||
+        !data.requestId) {
+        return;
+      }
+      const payload = await captureChatGptVisualizationSandboxAsset();
+      try {
+        window.parent.postMessage({
+          type: "omnichat-exporter:visualization-response",
+          requestId: data.requestId,
+          svg: payload.svg || "",
+          image: payload.image || "",
+          label: payload.label || "ChatGPT visualization",
+        }, event.origin || "*");
+      } catch (err) {
+        // The parent may have navigated while an export was being cancelled.
+      }
+    });
+  }
+
+  async function captureChatGptVisualizationSandboxAsset() {
+    const deadline = Date.now() + 1800;
+    let candidate = null;
+    while (Date.now() < deadline && !candidate) {
+      candidate = findChatGptVisualizationSandboxAsset();
+      if (!candidate) {
+        await new Promise((resolve) => window.setTimeout(resolve, 80));
+      }
+    }
+    return candidate || {};
+  }
+
+  function findChatGptVisualizationSandboxAsset() {
+    const documents = [document];
+    try {
+      const rootFrame = document.querySelector("iframe#root");
+      if (rootFrame && rootFrame.contentDocument) {
+        documents.push(rootFrame.contentDocument);
+      }
+    } catch (err) {
+      // The sandbox may still be navigating; retry from the caller.
+    }
+    let bestSvg = null;
+    let bestArea = 0;
+    for (const currentDocument of documents) {
+      if (!currentDocument || !currentDocument.querySelectorAll) {
+        continue;
+      }
+      currentDocument.querySelectorAll("svg").forEach((svg) => {
+        const viewBox = ensureString(svg.getAttribute("viewBox"))
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
+        const width = viewBox.length === 4 ? viewBox[2] : Number(svg.getAttribute("width"));
+        const height = viewBox.length === 4 ? viewBox[3] : Number(svg.getAttribute("height"));
+        const area = Number.isFinite(width) && Number.isFinite(height) ? width * height : 0;
+        if (area > bestArea && area > 4096) {
+          bestSvg = svg;
+          bestArea = area;
+        }
+      });
+    }
+    if (bestSvg && typeof XMLSerializer !== "undefined") {
+      return {
+        svg: new XMLSerializer().serializeToString(bestSvg),
+        label: bestSvg.getAttribute("aria-label") || "ChatGPT visualization",
+      };
+    }
+    for (const currentDocument of documents) {
+      const canvas = currentDocument && currentDocument.querySelector &&
+        currentDocument.querySelector("canvas");
+      if (!canvas || canvas.width < 64 || canvas.height < 64) {
+        continue;
+      }
+      try {
+        return {
+          image: canvas.toDataURL("image/png"),
+          label: canvas.getAttribute("aria-label") || "ChatGPT visualization",
+        };
+      } catch (err) {
+        // A tainted canvas cannot be copied; retain the conversation content.
+      }
+    }
+    for (const currentDocument of documents) {
+      const grid = findChatGptVisualizationHtmlGrid(currentDocument);
+      const svg = grid && buildChatGptVisualizationHtmlGridSvg(grid);
+      if (svg) {
+        return {
+          svg,
+          label: grid.getAttribute("aria-label") || "ChatGPT visualization",
+        };
+      }
+    }
+    return null;
+  }
+
+  function findChatGptVisualizationHtmlGrid(currentDocument) {
+    if (!currentDocument || !currentDocument.querySelectorAll) {
+      return null;
+    }
+    return Array.from(currentDocument.querySelectorAll("div")).find((candidate) => {
+      const sections = Array.from(candidate.children || []).filter(
+        (child) => child.tagName && child.tagName.toLowerCase() === "section",
+      );
+      return sections.length >= 2 && candidate.getBoundingClientRect().width >= 160;
+    }) || null;
+  }
+
+  function buildChatGptVisualizationHtmlGridSvg(grid) {
+    const bounds = grid.getBoundingClientRect();
+    if (!bounds || bounds.width < 1 || bounds.height < 1) {
+      return "";
+    }
+    const width = Math.max(1, Math.ceil(bounds.width));
+    const height = Math.max(1, Math.ceil(bounds.height));
+    const escape = (value) => String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;");
+    const elements = Array.from(grid.children || []);
+    let markup = `<rect x="0" y="0" width="${width}" height="${height}" fill="#f8fafc"/>`;
+    elements.forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return;
+      }
+      const x = rect.left - bounds.left;
+      const y = rect.top - bounds.top;
+      const style = getComputedStyle(element);
+      const tagName = element.tagName.toLowerCase();
+      if (tagName === "section") {
+        const background = /^rgba?\(0,\s*0,\s*0,\s*0\)$/i.test(style.backgroundColor)
+          ? "#ffffff"
+          : style.backgroundColor || "#ffffff";
+        const border = style.borderColor || "#94a3b8";
+        const radius = Math.max(0, parseFloat(style.borderTopLeftRadius) || 10);
+        markup += `<rect x="${x}" y="${y}" width="${rect.width}" height="${rect.height}" rx="${radius}" fill="${escape(background)}" stroke="${escape(border)}" stroke-width="1"/>`;
+        Array.from(element.children || []).forEach((line) => {
+          const lineRect = line.getBoundingClientRect();
+          const lineStyle = getComputedStyle(line);
+          const value = (line.innerText || line.textContent || "").trim();
+          if (!value || !lineRect.height) {
+            return;
+          }
+          const fontSize = Math.max(9, parseFloat(lineStyle.fontSize) || 14);
+          const color = lineStyle.color || "#0f172a";
+          const lineX = lineRect.left - bounds.left + lineRect.width / 2;
+          const lineY = lineRect.top - bounds.top + lineRect.height / 2 + fontSize * 0.34;
+          markup += `<text x="${lineX}" y="${lineY}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${escape(color)}">${escape(value)}</text>`;
+        });
+        return;
+      }
+      const value = (element.innerText || element.textContent || "").trim();
+      if (!value || value.length > 3) {
+        return;
+      }
+      const fontSize = Math.max(12, parseFloat(style.fontSize) || 20);
+      const color = style.color || "#475569";
+      markup += `<text x="${x + rect.width / 2}" y="${y + rect.height / 2 + fontSize * 0.34}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${escape(color)}">${escape(value)}</text>`;
+    });
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${markup}</svg>`;
   }
 
   function getPlatformLabel() {
@@ -14715,7 +17905,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       languageProfile,
       pendingResources,
     );
-    await showPdfFontsReady(pendingResources);
+    await showPdfFontsReady();
     return baseFont;
   }
 
@@ -14799,13 +17989,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   async function showPdfFontsAlreadyCached() {
-    updatePdfExportLoader({
-      stage: "Loading PDF fonts...",
-      detail: "All required fonts are already cached locally.",
-      progress: 0.84,
-      progressText: "Step 3 of 5",
-      indeterminate: false,
-    });
+    updatePdfExportLoader(createPdfLoaderState(3, 0.84));
     await waitForNextPaint();
   }
 
@@ -14857,16 +18041,8 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
   }
 
-  async function showPdfFontsReady(pendingResources) {
-    updatePdfExportLoader({
-      stage: "Loading PDF fonts...",
-      detail: pendingResources.length
-        ? "Required language fonts are ready for the PDF renderer."
-        : "No extra font download was needed.",
-      progress: 0.84,
-      progressText: "Step 3 of 5",
-      indeterminate: false,
-    });
+  async function showPdfFontsReady() {
+    updatePdfExportLoader(createPdfLoaderState(3, 0.84));
     await waitForNextPaint();
   }
 
@@ -14973,14 +18149,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       pdfFontBase64Promises[cacheKey] = (async function () {
         for (const url of urls) {
           try {
-            updatePdfFontDownloadProgress(progressState, label, 0, 0, true);
+            updatePdfFontDownloadProgress(progressState, 0, 0, true);
             const buffer = await requestRemoteArrayBuffer(
               url,
               `${label || "PDF"} font`,
               (loaded, total, indeterminate) => {
                 updatePdfFontDownloadProgress(
                   progressState,
-                  label,
                   loaded,
                   total,
                   indeterminate,
@@ -14992,7 +18167,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
             }
             updatePdfFontDownloadProgress(
               progressState,
-              label,
               buffer.byteLength,
               buffer.byteLength,
               false,
@@ -15024,31 +18198,26 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
 
   function updatePdfFontDownloadProgress(
     progressState,
-    label,
     loaded,
     total,
     indeterminate,
   ) {
     const state = normalizePdfFontProgressState(progressState);
-    const resourceLabel = formatPdfResourceLabel(label);
-    const resourceProgress = getPdfFontResourceProgress(
-      resourceLabel,
-      loaded,
-      total,
-    );
+    const resourceProgress = getPdfFontResourceProgress(loaded, total);
 
-    updatePdfExportLoader({
-      stage: "Loading PDF fonts...",
-      detail: buildPdfFontProgressDetail(resourceLabel, state),
-      progress: calculatePdfFontOverallProgress(
-        state,
-        resourceProgress.withinResource,
+    updatePdfExportLoader(
+      createPdfLoaderState(
+        3,
+        calculatePdfFontOverallProgress(state, resourceProgress.withinResource),
+        {
+          detail: "",
+          progressText: buildPdfFontProgressText(state, resourceProgress.meta),
+          indeterminate: Boolean(
+            indeterminate && !(Number.isFinite(total) && total > 0),
+          ),
+        },
       ),
-      progressText: buildPdfFontProgressText(state, resourceProgress.meta),
-      indeterminate: Boolean(
-        indeterminate && !(Number.isFinite(total) && total > 0),
-      ),
-    });
+    );
   }
 
   function normalizePdfFontProgressState(progressState) {
@@ -15068,23 +18237,23 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     };
   }
 
-  function getPdfFontResourceProgress(resourceLabel, loaded, total) {
+  function getPdfFontResourceProgress(loaded, total) {
     if (Number.isFinite(total) && total > 0 && Number.isFinite(loaded)) {
       const withinResource = Math.max(0, Math.min(1, loaded / total));
       return {
         withinResource,
-        meta: `${resourceLabel} ${Math.round(withinResource * 100)}%`,
+        meta: `${Math.round(withinResource * 100)}%`,
       };
     }
     if (Number.isFinite(loaded) && loaded > 0) {
       return {
         withinResource: 0,
-        meta: `${resourceLabel} ${formatPdfByteSize(loaded)} downloaded`,
+        meta: formatPdfByteSize(loaded),
       };
     }
     return {
       withinResource: 0,
-      meta: `${resourceLabel}...`,
+        meta: "",
     };
   }
 
@@ -15101,20 +18270,11 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     );
   }
 
-  function buildPdfFontProgressDetail(resourceLabel, state) {
-    const remainingLabels = state.pendingResources
-      .slice(Math.min(state.resourceIndex, state.pendingResources.length))
-      .map((entry) => formatPdfResourceLabel(entry.key));
-    return remainingLabels.length
-      ? `Loading ${resourceLabel}. Remaining resources: ${remainingLabels.join(", ")}.`
-      : `Loading ${resourceLabel}.`;
-  }
-
   function buildPdfFontProgressText(state, meta) {
     const resourceCountText =
       state.totalResources > 0
-        ? `${Math.min(state.resourceIndex + 1, state.totalResources)} / ${state.totalResources} resources`
-        : "Step 3 of 5";
+        ? `${Math.min(state.resourceIndex + 1, state.totalResources)} / ${state.totalResources}`
+        : "3/5";
     return meta ? `${resourceCountText} | ${meta}` : resourceCountText;
   }
 
@@ -15300,7 +18460,7 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function formatPdfTextWithEmoji(text) {
-    const raw = ensureString(text);
+    const raw = normalizePdfCombiningMarksForFont(text);
     if (!raw) {
       return "";
     }
@@ -15361,11 +18521,17 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     });
   }
 
+  function normalizePdfCombiningMarksForFont(text) {
+    return ensureString(text).replace(/[\u0322\u0334-\u0337]/g, (mark) => {
+      return PDF_COMBINING_MARK_FALLBACKS[mark] || mark;
+    });
+  }
+
   function buildPdfFontRoutedTextChunk(text, font) {
     const chunk = {
       text: text,
       font: font,
-      lineHeight: 1,
+      lineHeight: PDF_BODY_LINE_HEIGHT,
       noWrap: false,
       verticalAlign: "baseline",
       alignmentBaseline: "baseline",
@@ -15448,6 +18614,14 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
   }
 
   function resolvePdfSymbolFont(script, fontContext) {
+    if (script === "math") {
+      return (
+        fontContext.scriptFonts.math ||
+        fontContext.scriptFonts.symbolsExtra ||
+        fontContext.scriptFonts.symbolsText ||
+        ""
+      );
+    }
     if (script === "symbols") {
       return (
         activePdfEmojiFontFamily ||
@@ -15787,9 +18961,6 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    if (platform === "gemini") {
-      logGeminiThreadInjection("observer", "MutationObserver started");
-    }
   }
 
   function startViewportWatcher() {
