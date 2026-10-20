@@ -105,13 +105,18 @@ Everything runs locally.
 
 - Per-message PDF rendering with preserved role blocks
 - Conversation metadata included in the document header
-- Support for formatted text, lists, quotes, code blocks, tables and HTML-derived content
-- Syntax-highlighted code rendering
-- Support for AI-generated images (embedded directly in the PDF output)
+- Support for formatted text, tables and HTML-derived content
+- Nested ordered and unordered lists, task lists, and nested quotes
+- KaTeX / MathML support
+- Diagram support
+- Code blocks with language labels and source syntax colors when available
+- Support for AI-generated images embedded directly in the PDF output
+
+> **Note:** Emoji are rendered in monochrome. Complex mathematical expressions may not render exactly as they appear on the original platform.
 
 ### Character support
 
-- Support for emoji, symbols and extended Unicode characters (rendered in black and white when necessary)
+- Support for emoji, symbols and extended Unicode characters (rendered in black and white)
 
 ### Reliability and compatibility
 
@@ -140,7 +145,7 @@ Fonts are automatically loaded based on detected scripts to keep the export ligh
 
 ## Export Characteristics
 
-All export formats share the following properties:
+By default, all export formats share the following properties:
 
 - Includes the source URL
 - Includes the export date / timestamp
