@@ -25,6 +25,8 @@
     "exportOk",
     "exportFailed",
     "exportUnavailable",
+    "assistant",
+    "user",
   ];
   const translations = Object.create(null);
 
@@ -59,6 +61,8 @@
     "Export complete",
     "Export failed",
     "Export unavailable",
+    "Assistant",
+    "User",
   ]);
   add("fr", [
     "Exporter",
@@ -79,6 +83,8 @@
     "Export terminé",
     "Échec de l’export",
     "Export indisponible",
+    "Assistant",
+    "Utilisateur",
   ]);
   add("es", [
     "Exportar",
@@ -99,6 +105,8 @@
     "Exportación completada",
     "Error al exportar",
     "Exportación no disponible",
+    "Asistente",
+    "Usuario",
   ]);
   add("de", [
     "Exportieren",
@@ -119,6 +127,8 @@
     "Export abgeschlossen",
     "Export fehlgeschlagen",
     "Export nicht verfügbar",
+    "Assistent",
+    "Benutzer",
   ]);
   add("ru", [
     "Экспорт",
@@ -139,6 +149,8 @@
     "Экспорт завершён",
     "Ошибка экспорта",
     "Экспорт недоступен",
+    "Ассистент",
+    "Пользователь",
   ]);
   add("zh-CN", [
     "导出",
@@ -159,6 +171,8 @@
     "导出完成",
     "导出失败",
     "无法导出",
+    "助手",
+    "用户",
   ]);
   add("zh-TW", [
     "匯出",
@@ -179,6 +193,8 @@
     "匯出完成",
     "匯出失敗",
     "無法匯出",
+    "助理",
+    "使用者",
   ]);
   add("ja", [
     "エクスポート",
@@ -199,6 +215,8 @@
     "エクスポート完了",
     "エクスポート失敗",
     "エクスポートできません",
+    "アシスタント",
+    "ユーザー",
   ]);
   add("pt", [
     "Exportar",
@@ -219,6 +237,8 @@
     "Exportação concluída",
     "Falha na exportação",
     "Exportação indisponível",
+    "Assistente",
+    "Utilizador",
   ]);
   add("it", [
     "Esporta",
@@ -239,6 +259,8 @@
     "Esportazione completata",
     "Esportazione non riuscita",
     "Esportazione non disponibile",
+    "Assistente",
+    "Utente",
   ]);
   add("ar", [
     "تصدير",
@@ -259,6 +281,8 @@
     "اكتمل التصدير",
     "فشل التصدير",
     "التصدير غير متاح",
+    "المساعد",
+    "المستخدم",
   ]);
   add("be", [
     "Экспарт",
@@ -279,6 +303,8 @@
     "Экспарт завершаны",
     "Памылка экспарту",
     "Экспарт недаступны",
+    "Асістэнт",
+    "Карыстальнік",
   ]);
   add("bg", [
     "Експортиране",
@@ -299,6 +325,8 @@
     "Експортирането завърши",
     "Експортирането е неуспешно",
     "Експортирането не е налично",
+    "Асистент",
+    "Потребител",
   ]);
   add("cs", [
     "Exportovat",
@@ -319,6 +347,8 @@
     "Export dokončen",
     "Export se nezdařil",
     "Export není dostupný",
+    "Asistent",
+    "Uživatel",
   ]);
   add("da", [
     "Eksportér",
@@ -339,6 +369,8 @@
     "Eksport fuldført",
     "Eksport mislykkedes",
     "Eksport ikke tilgængelig",
+    "Assistent",
+    "Bruger",
   ]);
   add("el", [
     "Εξαγωγή",
@@ -359,6 +391,8 @@
     "Η εξαγωγή ολοκληρώθηκε",
     "Η εξαγωγή απέτυχε",
     "Η εξαγωγή δεν είναι διαθέσιμη",
+    "Βοηθός",
+    "Χρήστης",
   ]);
   add("eo", [
     "Eksporti",
@@ -379,6 +413,8 @@
     "Eksporto finiĝis",
     "Eksporto malsukcesis",
     "Eksporto ne disponeblas",
+    "Asistanto",
+    "Uzanto",
   ]);
   add("fi", [
     "Vie",
@@ -399,6 +435,8 @@
     "Vienti valmis",
     "Vienti epäonnistui",
     "Vienti ei ole käytettävissä",
+    "Avustaja",
+    "Käyttäjä",
   ]);
   add("he", [
     "ייצוא",
@@ -419,6 +457,8 @@
     "הייצוא הושלם",
     "הייצוא נכשל",
     "הייצוא אינו זמין",
+    "עוזר",
+    "משתמש",
   ]);
   add("hr", [
     "Izvezi",
@@ -439,6 +479,8 @@
     "Izvoz dovršen",
     "Izvoz nije uspio",
     "Izvoz nije dostupan",
+    "Asistent",
+    "Korisnik",
   ]);
   add("hu", [
     "Exportálás",
@@ -459,6 +501,8 @@
     "Exportálás kész",
     "Az exportálás sikertelen",
     "Az exportálás nem érhető el",
+    "Asszisztens",
+    "Felhasználó",
   ]);
   add("id", [
     "Ekspor",
@@ -479,6 +523,8 @@
     "Ekspor selesai",
     "Ekspor gagal",
     "Ekspor tidak tersedia",
+    "Asisten",
+    "Pengguna",
   ]);
   add("ka", [
     "ექსპორტი",
@@ -499,6 +545,8 @@
     "ექსპორტი დასრულდა",
     "ექსპორტი ვერ შესრულდა",
     "ექსპორტი მიუწვდომელია",
+    "ასისტენტი",
+    "მომხმარებელი",
   ]);
   add("ko", [
     "내보내기",
@@ -519,6 +567,8 @@
     "내보내기 완료",
     "내보내기 실패",
     "내보내기를 사용할 수 없습니다",
+    "어시스턴트",
+    "사용자",
   ]);
   add("mr", [
     "निर्यात",
@@ -539,6 +589,8 @@
     "निर्यात पूर्ण",
     "निर्यात अयशस्वी",
     "निर्यात उपलब्ध नाही",
+    "सहाय्यक",
+    "वापरकर्ता",
   ]);
   add("nl", [
     "Exporteren",
@@ -559,6 +611,8 @@
     "Export voltooid",
     "Export mislukt",
     "Export niet beschikbaar",
+    "Assistent",
+    "Gebruiker",
   ]);
   add("nb", [
     "Eksporter",
@@ -579,6 +633,8 @@
     "Eksport fullført",
     "Eksport mislyktes",
     "Eksport ikke tilgjengelig",
+    "Assistent",
+    "Bruker",
   ]);
   add("pl", [
     "Eksportuj",
@@ -599,6 +655,8 @@
     "Eksport zakończony",
     "Eksport nie powiódł się",
     "Eksport niedostępny",
+    "Asystent",
+    "Użytkownik",
   ]);
   add("pt-BR", [
     "Exportar",
@@ -619,6 +677,8 @@
     "Exportação concluída",
     "Falha na exportação",
     "Exportação indisponível",
+    "Assistente",
+    "Usuário",
   ]);
   add("ro", [
     "Exportă",
@@ -639,6 +699,8 @@
     "Export finalizat",
     "Export eșuat",
     "Export indisponibil",
+    "Asistent",
+    "Utilizator",
   ]);
   add("sk", [
     "Exportovať",
@@ -659,6 +721,8 @@
     "Export dokončený",
     "Export zlyhal",
     "Export nie je dostupný",
+    "Asistent",
+    "Používateľ",
   ]);
   add("sr", [
     "Извези",
@@ -679,6 +743,8 @@
     "Извоз је завршен",
     "Извоз није успео",
     "Извоз није доступан",
+    "Асистент",
+    "Корисник",
   ]);
   add("sv", [
     "Exportera",
@@ -699,6 +765,8 @@
     "Exporten är klar",
     "Exporten misslyckades",
     "Exporten är inte tillgänglig",
+    "Assistent",
+    "Användare",
   ]);
   add("th", [
     "ส่งออก",
@@ -719,6 +787,8 @@
     "ส่งออกเสร็จแล้ว",
     "ส่งออกไม่สำเร็จ",
     "ไม่สามารถส่งออกได้",
+    "ผู้ช่วย",
+    "ผู้ใช้",
   ]);
   add("tr", [
     "Dışa aktar",
@@ -739,6 +809,8 @@
     "Dışa aktarma tamamlandı",
     "Dışa aktarma başarısız",
     "Dışa aktarma kullanılamıyor",
+    "Asistan",
+    "Kullanıcı",
   ]);
   add("ug", [
     "چىقىرىش",
@@ -759,6 +831,8 @@
     "چىقىرىش تاماملاندى",
     "چىقىرىش مەغلۇپ بولدى",
     "چىقىرىشنى ئىشلەتكىلى بولمايدۇ",
+    "ياردەمچى",
+    "ئىشلەتكۈچى",
   ]);
   add("uk", [
     "Експорт",
@@ -779,6 +853,8 @@
     "Експорт завершено",
     "Помилка експорту",
     "Експорт недоступний",
+    "Асистент",
+    "Користувач",
   ]);
   add("vi", [
     "Xuất",
@@ -799,6 +875,8 @@
     "Xuất hoàn tất",
     "Xuất thất bại",
     "Không thể xuất",
+    "Trợ lý",
+    "Người dùng",
   ]);
   add("fr-CA", [
     "Exporter",
@@ -819,6 +897,8 @@
     "Export terminé",
     "Échec de l’export",
     "Export indisponible",
+    "Assistant",
+    "Utilisateur",
   ]);
   add("ckb", [
     "هەناردەکردن",
@@ -839,6 +919,8 @@
     "هەناردەکردن تەواو بوو",
     "هەناردەکردن سەرکەوتوو نەبوو",
     "هەناردەکردن بەردەست نییە",
+    "یاریدەدەر",
+    "بەکارهێنەر",
   ]);
   add("es-419", [
     "Exportar",
@@ -859,6 +941,8 @@
     "Exportación completada",
     "Error al exportar",
     "Exportación no disponible",
+    "Asistente",
+    "Usuario",
   ]);
 
   const exportControlTranslations = Object.freeze({
