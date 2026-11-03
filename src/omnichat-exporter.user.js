@@ -42,7 +42,7 @@
 // @name:es-419 OmniChat Exporter - Exporta al instante cualquier chat de IA
 
 // @namespace    https://github.com/DREwX-code
-// @version      1.3.0
+// @version      1.3.1
 // @icon         https://raw.githubusercontent.com/DREwX-code/omnichat-exporter/main/assets/logo.png
 
 // @description Export and download conversations from ChatGPT, Gemini, Claude, Grok, and DeepSeek in TXT, PDF, JSON, or Markdown format - per message or full thread.
@@ -111,7 +111,7 @@
 // @connect lh3.googleusercontent.com
 // @connect *.googleusercontent.com
 
-// @require      https://update.greasyfork.org/scripts/589875/1969247/OmniChat%20Exporter%20-%20Translation%20Library.js
+// @require      https://update.greasyfork.org/scripts/589875/1985495/OmniChat%20Exporter%20-%20Translation%20Library.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js
 // @run-at       document-idle
@@ -219,6 +219,8 @@ Licenses:
     exportOk: "Export complete",
     exportFailed: "Export failed",
     exportUnavailable: "Export unavailable",
+    assistant: "Assistant",
+    user: "User",
     stopExport: "Stop",
     exportCancelled: "Export stopped",
   };
@@ -17122,10 +17124,13 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     }
     const detectorModule = await loadPdfLanguageDetector();
     throwIfExportCancelled(session);
+    const roleLabels = { user: t("user"), assistant: t("assistant") };
     const languageProfile = buildPdfLanguageProfile(messages, detectorModule, [
       title,
       conversationTitle,
       metaLines.join("\n"),
+      roleLabels.user,
+      roleLabels.assistant,
     ]);
     updatePdfExportLoader(createPdfLoaderState(2, 0.28));
     await waitForNextPaint();
@@ -17146,8 +17151,9 @@ button[data-omni-export-gemini-thread][data-omni-gemini-native-thread] .omni-exp
     const wrapRoleLabel = (role) => {
       if (!role) return "MESSAGE";
       const lowered = String(role).toLowerCase();
-      if (lowered === "user") return "UTILISATEUR";
-      if (lowered === "assistant") return "ASSISTANT";
+      if (lowered === "user" || lowered === "assistant") {
+        return roleLabels[lowered].toLocaleUpperCase();
+      }
       return String(role).toUpperCase();
     };
     const roleTheme = (role) => {
