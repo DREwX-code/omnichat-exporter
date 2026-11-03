@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.3.1] - 2026-11-03
+
+### Fixed
+
+- Assistant and user labels in PDF exports now follow the interface language
+
 ## [1.3.0] - 2026-10-20
 
 ### Added
